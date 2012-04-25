@@ -1,4 +1,5 @@
-dsh "testing" do
-   user "test1"
-   provider "dsh"
+dsh_group "testing" do
+  user "test1"
+  admin_user "root"
+  #provider "dsh_group"
 end
