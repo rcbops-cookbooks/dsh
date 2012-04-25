@@ -24,7 +24,7 @@ action :join do
     pubkey = ::File.read("#{home}/.ssh/id_rsa.pub").strip
     node["dsh"]["admin_groups"][new_resource.name] ||= {}
     if pubkey != node["dsh"]["admin_groups"][new_resource.name]["pubkey"]
-      Chef::Log.info("Updating pubkey for admin_user #{new_resource.admin_user}"
+      Chef::Log.info("Updating pubkey for admin_user #{new_resource.admin_user}")
       node["dsh"]["admin_groups"][new_resource.name] = {
         "user" => new_resource.admin_user,
         "pubkey" => pubkey
