@@ -1,5 +1,5 @@
 dsh_group "testing" do
-  user "test1"
-  admin_user "root"
+  user "test2"
+  admin_user "test1"
   #provider "dsh_group"
 end
