@@ -12,7 +12,7 @@ action :join do
     user_p.run_action(:create)
     home = get_home(u)
 
-    d = directory "#{home}" do
+    d = directory home do
       owner u
       group u
       action :create
@@ -56,31 +56,33 @@ action :join do
     action :upgrade
   end
 
-  ruby_block "Configure dsh" do
-    block {
-      update_host_key
+  update_host_key
   
-      if new_resource.user
-        #Member node: allow logins from admin_users
-        #Join group by setting appropriate attributes
-        node["dsh"]["groups"][new_resource.name] = new_resource.user
+  if new_resource.user
+    #Member node: allow logins from admin_users
+    #Join group by setting appropriate attributes
+    node["dsh"]["groups"][new_resource.name] = new_resource.user
     
-        #Todo configure authorized_keys
-        home = get_home(new_resource.user)
-        auth_key_file = "#{home}/.ssh/authorized_keys"
-        #members.each { |m| }
-        new_resource.updated_by_last_action(true)
-      end
-      
-      if new_resource.admin_user
-        #Admin node configure ability to log in to members.
-        home = get_home(new_resource.admin_user)
-        get_pubkey(home)
-        new_resource.updated_by_last_action(true)
-      end
-    }
+    #Todo configure authorized_keys
+    home = get_home(new_resource.user)
+    auth_key_file = "#{home}/.ssh/authorized_keys"
+    #members.each { |m| }
+    new_resource.updated_by_last_action(true)
   end
+  
+  if new_resource.admin_user
+    #Admin node configure ability to log in to members.
+    home = get_home(new_resource.admin_user)
+    get_pubkey(home)
+    new_resource.updated_by_last_action(true)
+  end
+  hosts = []
+  members.each { |n|
+    hosts.push n['name']    
+  }
+  node['dsh']['hosts'] = hosts
 end
+
 
 action :leave do
   execute "revoke access" do
@@ -126,4 +128,8 @@ def get_pubkey(home)
       "pubkey" => pubkey
     }
   end
+end
+
+if Chef::Config[:solo]
+  Chef::Log.warn("This recipe uses search. Chef Solo does not support search.")
 end
