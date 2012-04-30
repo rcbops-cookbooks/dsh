@@ -19,8 +19,12 @@ action :join do
   if new_resource.user
     #Member node: allow logins from admin_users
     #Join group by setting appropriate attributes
-    node["dsh"]["groups"][new_resource.name] = new_resource.user
-    
+    node["dsh"]["groups"][new_resource.name] = {}
+    node["dsh"]["groups"][new_resource.name]["user"] = new_resource.user
+    node["dsh"]["groups"][new_resource.name]["access_name"] = node['fqdn']
+    if new_resource.network
+      node["dsh"]["groups"][new_resource.name]["access_name"] = get_ip_for_net(new_resource.network)
+    end
     home = get_home(new_resource.user)
     auth_key_file = "#{home}/.ssh/authorized_keys"
     authorized = []
@@ -49,7 +53,6 @@ action :join do
     members.each do |n| 
       hosts << {"name" => n.name, "key" => n['dsh']['host_key']}
     end
-    Chef::Log.info("hosts %{hosts}")
     remove_hosts = old_hosts - hosts
     remove_hosts.each do |h| 
       execute "ssh-keygen -R #{h['name']}" do
@@ -72,13 +75,12 @@ action :join do
     #Configure dsh
     f = ::File.new("#{home}/.dsh/group/#{new_resource.name}", "w")
     members.each do |n|
-      f.write("#{node['dsh']['groups'][new_resource.name]}@#{n.name}\n")
+      f.write("#{node['dsh']['groups'][new_resource.name]['user']}@#{n.name}\n")
     end
     f.close()
   end
 
 end
-
 
 action :leave do
   execute "revoke access" do
