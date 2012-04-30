@@ -1,62 +1,20 @@
+require 'set'
+
+if Chef::Config[:solo]
+  Chef::Log.warn("This recipe uses search. Chef Solo does not support search.")
+end
+
 action :join do
-  users = []
-  users.push new_resource.user if new_resource.user
-  users.push new_resource.admin_user if new_resource.admin_user
-  members = find_dsh_group_members(new_resource.name)
-  admins = find_dsh_group_admins(new_resource.name)
-  users.each { |u|
-    user_p = user u do
-      shell "/bin/bash"
-      home "/home/#{u}"
-    end
-    user_p.run_action(:create)
-    home = get_home(u)
-
-    d = directory home do
-      owner u
-      group u
-      action :create
-    end
-    d.run_action(:create)
-
-    d = directory "#{home}/.ssh" do
-      only_if { u == new_resource.user }
-      owner u
-      group u
-      action :create
-    end
-    d.run_action(:create)
-
-    d = directory "#{home}/.ssh" do
-      only_if { u == new_resource.admin_user}
-      owner u
-      action :create
-    end
-    d.run_action(:create)
-
-    d = directory "#{home}/.dsh/group" do
-      only_if { u == new_resource.admin_user}
-      owner u
-      group u
-      recursive true
-      action :create
-    end
-    d.run_action(:create)
-    f = file "#{home}/.dsh/group/#{new_resource.name}" do
-      only_if { u == new_resource.admin_user}
-      owner u
-      group u
-      action :create
-    end
-    f.run_action(:create)
-  }
-  
+ 
   Package "dsh" do
     only_if { new_resource.admin_user}
     action :upgrade
   end
 
+  configure_users
   update_host_key
+  admins = find_dsh_group_admins(new_resource.name)
+  members = find_dsh_group_members(new_resource.name)
   
   if new_resource.user
     #Member node: allow logins from admin_users
@@ -66,7 +24,13 @@ action :join do
     #Todo configure authorized_keys
     home = get_home(new_resource.user)
     auth_key_file = "#{home}/.ssh/authorized_keys"
-    #members.each { |m| }
+    authorized = []
+    keys = Set.new(::File.new(auth_key_file, "r").read().split(/\n/))
+    f = ::File.new(auth_key_file, "a")
+    admins.each do |n|
+      k = n['dsh']['admin_groups'][new_resource.name]['pubkey']
+      f.write("#{k}\n") unless keys.include? k
+    end
     new_resource.updated_by_last_action(true)
   end
   
@@ -75,12 +39,41 @@ action :join do
     home = get_home(new_resource.admin_user)
     get_pubkey(home)
     new_resource.updated_by_last_action(true)
+
+    #Remove hosts that are no longer in the list
+    old_hosts = node['dsh']['hosts']
+    hosts = []
+    members.each do |n| 
+      hosts << {"name" => n.name, "key" => n['dsh']['host_key']}
+    end
+    Chef::Log.info("hosts %{hosts}")
+    remove_hosts = old_hosts - hosts
+    remove_hosts.each do |h| 
+      execute "ssh-keygen -R #{h['name']}" do
+        Chef::Log.info("Removing known host #{h['name']}")
+        user new_resource.admin_user
+      end
+    end
+
+    #Add new hosts to known_hosts
+    f = ::File.new("#{home}/.ssh/known_hosts", "a")
+    hosts.each do |h|
+      if `su #{new_resource.admin_user} -c 'ssh-keygen -F #{h['name']}' | wc -l`.strip == "0"
+        Chef::Log.info("Adding known host #{h['name']}")
+        f.write("#{h['name']} #{h['key']}\n")
+      end
+    end
+    f.close()
+    node['dsh']['hosts'] = hosts 
+
+    #Configure dsh
+    f = ::File.new("#{home}/.dsh/group/#{new_resource.name}", "w")
+    members.each do |n|
+      f.write("#{node['dsh']['groups'][new_resource.name]}@#{n.name}\n")
+    end
+    f.close()
   end
-  hosts = []
-  members.each { |n|
-    hosts.push n['name']    
-  }
-  node['dsh']['hosts'] = hosts
+
 end
 
 
@@ -130,6 +123,54 @@ def get_pubkey(home)
   end
 end
 
-if Chef::Config[:solo]
-  Chef::Log.warn("This recipe uses search. Chef Solo does not support search.")
+def configure_users()
+  users = []
+  users.push new_resource.user if new_resource.user
+  users.push new_resource.admin_user if new_resource.admin_user
+  users.each { |u|
+    user_p = user u do
+      shell "/bin/bash"
+      home "/home/#{u}"
+    end
+    user_p.run_action(:create)
+    home = get_home(u)
+    rs = []
+    d = directory home do
+             owner u
+             group u
+             action :create
+    end
+    d.run_action(:create)
+
+    d = directory "#{home}/.ssh" do
+      owner u
+      group u
+      action :create
+    end
+    d.run_action(:create)
+
+    ["#{home}/.ssh/authorized_keys", "#{home}/.ssh/known_hosts"].each do |i|
+      f = file i do
+        owner u
+        group u
+        action :create
+      end
+      f.run_action(:create)
+    end
+    d = directory "#{home}/.dsh/group" do
+      only_if { u == new_resource.admin_user}
+      owner u
+      group u
+      recursive true
+      action :create
+    end
+    d.run_action(:create)
+    f = file "#{home}/.dsh/group/#{new_resource.name}" do
+      only_if { u == new_resource.admin_user}
+      owner u
+      group u
+      action :create
+    end
+    f.run_action(:create)
+  }
 end
