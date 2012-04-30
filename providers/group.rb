@@ -21,16 +21,19 @@ action :join do
     #Join group by setting appropriate attributes
     node["dsh"]["groups"][new_resource.name] = new_resource.user
     
-    #Todo configure authorized_keys
     home = get_home(new_resource.user)
     auth_key_file = "#{home}/.ssh/authorized_keys"
     authorized = []
+    
+    #configure authorized_keys
     keys = Set.new(::File.new(auth_key_file, "r").read().split(/\n/))
     f = ::File.new(auth_key_file, "a")
     admins.each do |n|
       k = n['dsh']['admin_groups'][new_resource.name]['pubkey']
       f.write("#{k}\n") unless keys.include? k
     end
+    #TODO: Remove managed authorized_keys that are no longer in use.
+    
     new_resource.updated_by_last_action(true)
   end
   
@@ -125,8 +128,8 @@ end
 
 def configure_users()
   users = []
-  users.push new_resource.user if new_resource.user
-  users.push new_resource.admin_user if new_resource.admin_user
+  users << new_resource.user if new_resource.user
+  users << new_resource.admin_user if new_resource.admin_user
   users.each { |u|
     user_p = user u do
       shell "/bin/bash"
