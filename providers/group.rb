@@ -23,7 +23,7 @@ action :join do
     node["dsh"]["groups"][new_resource.name]["user"] = new_resource.user
     node["dsh"]["groups"][new_resource.name]["access_name"] = node['fqdn']
     if new_resource.network
-      node["dsh"]["groups"][new_resource.name]["access_name"] = Chef::Recipe::IPManagement.get_ip_for_net(new_resource.network)
+      node["dsh"]["groups"][new_resource.name]["access_name"] = ::Chef::Recipe::IPManagement.get_ip_for_net(new_resource.network)
     end
     home = get_home(new_resource.user)
     auth_key_file = "#{home}/.ssh/authorized_keys"
