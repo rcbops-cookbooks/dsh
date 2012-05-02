@@ -51,7 +51,7 @@ action :join do
     old_hosts = node['dsh']['hosts']
     hosts = []
     members.each do |n| 
-      hosts << {"name" => n.name, "key" => n['dsh']['host_key']}
+      hosts << {"name" => n['dsh']['groups'][new_resource.name]['access_name'], "key" => n['dsh']['host_key']}
     end
     remove_hosts = old_hosts - hosts
     remove_hosts.each do |h| 
@@ -75,8 +75,8 @@ action :join do
     #Configure dsh
     f = ::File.new("#{home}/.dsh/group/#{new_resource.name}", "w")
     members.each do |n|
-      Chef::Log.info("Adding #{node.name} to dsh group #{new_resource.name}")
-      f.write("#{node['dsh']['groups'][new_resource.name]['user']}@#{n.name}\n")
+      Chef::Log.info("Adding #{n.name} to dsh group #{new_resource.name}")
+      f.write("#{n['dsh']['groups'][new_resource.name]['user']}@#{n['dsh']['groups'][new_resource.name]['access_name']}\n")
     end
     f.close()
   end
