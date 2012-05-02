@@ -1,4 +1,4 @@
-actions :join, :leave
+actions :join
 
 def initialize(*args)
   super

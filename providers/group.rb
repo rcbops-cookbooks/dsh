@@ -83,12 +83,6 @@ action :join do
 
 end
 
-action :leave do
-  execute "revoke access" do
-    command "rm /tmp/#{new_resource.user}"
-  end
-end
-
 def update_host_key()
   host_key = ::File.read("/etc/ssh/ssh_host_rsa_key.pub").strip
   if host_key != node["dsh"]["host_key"]
