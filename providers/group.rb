@@ -75,6 +75,7 @@ action :join do
     #Configure dsh
     f = ::File.new("#{home}/.dsh/group/#{new_resource.name}", "w")
     members.each do |n|
+      Chef::Log.info("Adding #{node.name} to dsh group #{new_resource.name}")
       f.write("#{node['dsh']['groups'][new_resource.name]['user']}@#{n.name}\n")
     end
     f.close()
