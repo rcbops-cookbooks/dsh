@@ -99,11 +99,11 @@ def update_host_key()
 end
 
 def find_dsh_group_members(name)
-  return search(:node, "dsh_groups:#{new_resource.name}")
+  return search(:node, "dsh_groups:#{new_resource.name} AND chef_environment:#{node.chef_environment}")
 end
 
 def find_dsh_group_admins(name)
-  return search(:node, "dsh_admin_groups:#{new_resource.name}")
+  return search(:node, "dsh_admin_groups:#{new_resource.name} AND chef_environment:#{node.chef_environment}")
 end
 
 def get_home(user)
