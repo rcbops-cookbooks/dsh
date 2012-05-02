@@ -134,11 +134,13 @@ def configure_users()
   users << new_resource.user if new_resource.user
   users << new_resource.admin_user if new_resource.admin_user
   users.each { |u|
-    user_p = user u do
-      shell "/bin/bash"
-      home "/home/#{u}"
+    if not u == "root"
+        user_p = user u do
+        shell "/bin/bash"
+        home "/home/#{u}"
+      end
+      user_p.run_action(:create)
     end
-    user_p.run_action(:create)
     home = get_home(u)
     rs = []
     d = directory home do
