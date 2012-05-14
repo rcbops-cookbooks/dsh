@@ -5,7 +5,6 @@ if Chef::Config[:solo]
 end
 
 action :join do
- 
   Package "dsh" do
     only_if { new_resource.admin_user}
     action :upgrade
@@ -23,7 +22,8 @@ action :join do
     node["dsh"]["groups"][new_resource.name]["user"] = new_resource.user
     node["dsh"]["groups"][new_resource.name]["access_name"] = node['fqdn']
     if new_resource.network
-      node["dsh"]["groups"][new_resource.name]["access_name"] = ::Chef::Recipe::IPManagement.get_ip_for_net(new_resource.network, node)
+      node["dsh"]["groups"][new_resource.name]["access_name"] = 
+        ::Chef::Recipe::IPManagement.get_ip_for_net(new_resource.network, node)
     end
     home = get_home(new_resource.user)
     auth_key_file = "#{home}/.ssh/authorized_keys"
@@ -31,13 +31,24 @@ action :join do
     
     #configure authorized_keys
     keys = Set.new(::File.new(auth_key_file, "r").read().split(/\n/))
-    f = ::File.new(auth_key_file, "a")
-    admins.each do |n|
-      k = n['dsh']['admin_groups'][new_resource.name]['pubkey']
-      f.write("#{k}\n") unless keys.include? k
+    group_keys = admins.collect() do |n|
+      n['dsh']['admin_groups'][new_resource.name]['pubkey']
     end
-    #TODO: Remove managed authorized_keys that are no longer in use.
-    
+    keys += group_keys
+    node['dsh']['groups'][new_resource.name]['authorized_keys'] ||= []
+    old_keys = node['dsh']['groups'][new_resource.name]['authorized_keys']
+
+    #don't write keys previously in the group that no longer exist.
+    keys -= (old_keys - group_keys)
+    f = file "#{home}/.ssh/authorized_keys" do
+        owner new_resource.user
+        group new_resource.user
+        content keys.collect {|k| k}.join("\n")
+        action :create
+    end
+    f.run_action(:create)
+    node['dsh']['groups'][new_resource.name]['authorized_keys'] = group_keys
+
     new_resource.updated_by_last_action(true)
   end
   
@@ -51,7 +62,8 @@ action :join do
     old_hosts = node['dsh']['hosts']
     hosts = []
     members.each do |n| 
-      hosts << {"name" => n['dsh']['groups'][new_resource.name]['access_name'], "key" => n['dsh']['host_key']}
+      hosts << {"name" => n['dsh']['groups'][new_resource.name]['access_name'],
+        "key" => n['dsh']['host_key']}
     end
     remove_hosts = old_hosts - hosts
     remove_hosts.each do |h| 
@@ -76,7 +88,8 @@ action :join do
     f = ::File.new("#{home}/.dsh/group/#{new_resource.name}", "w")
     members.each do |n|
       Chef::Log.info("Adding #{n.name} to dsh group #{new_resource.name}")
-      f.write("#{n['dsh']['groups'][new_resource.name]['user']}@#{n['dsh']['groups'][new_resource.name]['access_name']}\n")
+      f.write("#{n['dsh']['groups'][new_resource.name]['user']}@" +
+              "#{n['dsh']['groups'][new_resource.name]['access_name']}\n")
     end
     f.close()
   end
@@ -93,11 +106,13 @@ def update_host_key()
 end
 
 def find_dsh_group_members(name)
-  return search(:node, "dsh_groups:#{new_resource.name} AND chef_environment:#{node.chef_environment}")
+  return search(:node, "dsh_groups:#{new_resource.name} AND " +
+                "chef_environment:#{node.chef_environment}")
 end
 
 def find_dsh_group_admins(name)
-  return search(:node, "dsh_admin_groups:#{new_resource.name} AND chef_environment:#{node.chef_environment}")
+  return search(:node, "dsh_admin_groups:#{new_resource.name} " +
+                "AND chef_environment:#{node.chef_environment}")
 end
 
 def get_home(user)
@@ -109,7 +124,8 @@ def get_pubkey(home)
   pubkey_path = "#{privkey_path}.pub"
   if not (::File.exists? privkey_path or ::File.exists? pubkey_path)
     Chef::Log.info("Generating ssh keys for user #{new_resource.admin_user}")
-    system("su #{new_resource.admin_user} -c 'ssh-keygen -q -f #{privkey_path} -P \"\"'", :in=>"/dev/null")
+    system("su #{new_resource.admin_user} -c 'ssh-keygen -q -f #{privkey_path} " +
+           "-P \"\"'", :in=>"/dev/null")
     new_resource.updated_by_last_action(true)
   end
   pubkey = ::File.read("#{home}/.ssh/id_rsa.pub").strip
@@ -134,23 +150,23 @@ def configure_users()
         home "/home/#{u}"
       end
       user_p.run_action(:create)
+      home = get_home(u)
+      rs = []
+      d = directory home do
+        owner u
+        group u
+        mode 0700
+        action :create
+      end
+      d.run_action(:create)
     end
-    home = get_home(u)
-    rs = []
-    d = directory home do
-             owner u
-             group u
-             action :create
-    end
-    d.run_action(:create)
-
     d = directory "#{home}/.ssh" do
       owner u
       group u
       action :create
     end
     d.run_action(:create)
-
+    home = get_home(u)
     ["#{home}/.ssh/authorized_keys", "#{home}/.ssh/known_hosts"].each do |i|
       f = file i do
         owner u
