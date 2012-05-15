@@ -1,11 +1,14 @@
 require 'set'
+require "pp"
 
 if Chef::Config[:solo]
   Chef::Log.warn("This recipe uses search. Chef Solo does not support search.")
 end
 
 action :join do
-  Package "dsh" do
+  Chef::Log.info("Howdy from :join -- #{PP.pp(new_resource,dump='')}, current: #{PP.pp(current_resource,dump='')}")
+
+  Package "pssh" do
     only_if { new_resource.admin_user}
     action :upgrade
   end
@@ -14,7 +17,7 @@ action :join do
   update_host_key
   admins = find_dsh_group_admins(new_resource.name)
   members = find_dsh_group_members(new_resource.name)
-  
+
   if new_resource.user
     #Member node: allow logins from admin_users
     #Join group by setting appropriate attributes
@@ -22,13 +25,13 @@ action :join do
     node["dsh"]["groups"][new_resource.name]["user"] = new_resource.user
     node["dsh"]["groups"][new_resource.name]["access_name"] = node['fqdn']
     if new_resource.network
-      node["dsh"]["groups"][new_resource.name]["access_name"] = 
+      node["dsh"]["groups"][new_resource.name]["access_name"] =
         ::Chef::Recipe::IPManagement.get_ip_for_net(new_resource.network, node)
     end
     home = get_home(new_resource.user)
     auth_key_file = "#{home}/.ssh/authorized_keys"
     authorized = []
-    
+
     #configure authorized_keys
     keys = Set.new(::File.new(auth_key_file, "r").read().split(/\n/))
     group_keys = admins.collect() do |n|
@@ -41,17 +44,17 @@ action :join do
     #don't write keys previously in the group that no longer exist.
     keys -= (old_keys - group_keys)
     f = file "#{home}/.ssh/authorized_keys" do
-        owner new_resource.user
-        group new_resource.user
-        content keys.collect {|k| k}.join("\n")
-        action :create
+      owner new_resource.user
+      group new_resource.user
+      content keys.collect {|k| k}.join("\n")
+      action :create
     end
     f.run_action(:create)
     node['dsh']['groups'][new_resource.name]['authorized_keys'] = group_keys
 
     new_resource.updated_by_last_action(true)
   end
-  
+
   if new_resource.admin_user
     #Admin node configure ability to log in to members.
     home = get_home(new_resource.admin_user)
@@ -61,12 +64,12 @@ action :join do
     #Remove hosts that are no longer in the list
     old_hosts = node['dsh']['hosts']
     hosts = []
-    members.each do |n| 
+    members.each do |n|
       hosts << {"name" => n['dsh']['groups'][new_resource.name]['access_name'],
         "key" => n['dsh']['host_key']}
     end
     remove_hosts = old_hosts - hosts
-    remove_hosts.each do |h| 
+    remove_hosts.each do |h|
       execute "ssh-keygen -R #{h['name']}" do
         Chef::Log.info("Removing known host #{h['name']}")
         user new_resource.admin_user
@@ -82,7 +85,7 @@ action :join do
       end
     end
     f.close()
-    node['dsh']['hosts'] = hosts 
+    node['dsh']['hosts'] = hosts
 
     #Configure dsh
     f = ::File.new("#{home}/.dsh/group/#{new_resource.name}", "w")
@@ -145,7 +148,7 @@ def configure_users()
   users << new_resource.admin_user if new_resource.admin_user
   users.each { |u|
     if not u == "root"
-        user_p = user u do
+      user_p = user u do
         shell "/bin/bash"
         home "/home/#{u}"
       end
@@ -194,31 +197,32 @@ def configure_users()
 end
 
 action :execute do
+  Chef::Log.info("Howdy from :execute -- #{PP.pp(new_resource,dump='')}, current: #{PP.pp(current_resource,dump='')}")
+
   def shell_escape(s)
     return "'" + s.gsub(/\'/, "'\"'\"'") + "'"
   end
-  if current_resource.admin_user then
-    new_resource.admin_user = current_resource.admin_user
-    new_resource.user = current_resource.user
-    new_resource.admin_pubkey = current_resource.admin_pubkey
-    new_resource.network = current_resource.network
-    new_resource.updated_by_last_action(true)
-    if not new_resource.execute then
-      raise "Nothing to execute"
-    end
-    cmd = "pssh -h ~/.dsh/group/#{new_resource.name} " +
+  # if current_resource.admin_user then
+  #   new_resource.admin_user = current_resource.admin_user
+  #   new_resource.user = current_resource.user
+  #   new_resource.admin_pubkey = current_resource.admin_pubkey
+  #   new_resource.network = current_resource.network
+  #   new_resource.updated_by_last_action(true)
+  #   if not new_resource.execute then
+  #     raise "Nothing to execute"
+  #   end
+    cmd = "parallel-ssh -h ~/.dsh/group/#{new_resource.name} " +
       "#{shell_escape(new_resource.execute)}"
-    Chef::Log.info("I would run #{cmd}"
-  else
-    raise "Attempted to execute a distributed ssh command from a non-admin node"
-  end
-  
+    Chef::Log.info("I would run #{cmd}")
+  # else
+  #   raise "Attempted to execute a distributed ssh command from a non-admin node"
+  # end
+end
 
+# attribute :group, :kind_of => String, :name_attribute => true
+# attribute :user, :kind_of => String, :default => nil
+# attribute :admin_user, :kind_of => String, :default => nil
+# attribute :admin_pubkey, :kind_of => String, :default => nil
+# attribute :network, :kind_of => String, :default => nil
+# attribute :execute, :kind_of => String, :default => nil
 
-  attribute :group, :kind_of => String, :name_attribute => true
-  attribute :user, :kind_of => String, :default => nil
-  attribute :admin_user, :kind_of => String, :default => nil
-  attribute :admin_pubkey, :kind_of => String, :default => nil
-  attribute :network, :kind_of => String, :default => nil
-  attribute :execute, :kind_of => String, :default => nil
-  
