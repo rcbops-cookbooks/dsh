@@ -57,6 +57,8 @@ action :join do
 
   if new_resource.admin_user
     #Admin node configure ability to log in to members.
+    node['dsh']['admin_groups'][new_resource.name]['admin_user'] =
+      new_resource.admin_user
     home = get_home(new_resource.admin_user)
     get_pubkey(home)
     new_resource.updated_by_last_action(true)
@@ -198,31 +200,17 @@ end
 
 action :execute do
   Chef::Log.info("Howdy from :execute -- #{PP.pp(new_resource,dump='')}, current: #{PP.pp(current_resource,dump='')}")
-
+  admin_user = node['dsh']['admin_groups'][new_resource.name]['admin_user']
+  home = get_home(admin_user)
   def shell_escape(s)
     return "'" + s.gsub(/\'/, "'\"'\"'") + "'"
   end
-  # if current_resource.admin_user then
-  #   new_resource.admin_user = current_resource.admin_user
-  #   new_resource.user = current_resource.user
-  #   new_resource.admin_pubkey = current_resource.admin_pubkey
-  #   new_resource.network = current_resource.network
-  #   new_resource.updated_by_last_action(true)
-  #   if not new_resource.execute then
-  #     raise "Nothing to execute"
-  #   end
-    cmd = "parallel-ssh -h ~/.dsh/group/#{new_resource.name} " +
-      "#{shell_escape(new_resource.execute)}"
-    Chef::Log.info("I would run #{cmd}")
-  # else
-  #   raise "Attempted to execute a distributed ssh command from a non-admin node"
-  # end
+  
+  cmd = "parallel-ssh -h #{home}/.dsh/group/#{new_resource.name} " +
+    "#{shell_escape(new_resource.execute)}"
+  Chef::Log.info("Executing #{cmd}")
+  execute cmd do
+    user admin_user
+  end
 end
-
-# attribute :group, :kind_of => String, :name_attribute => true
-# attribute :user, :kind_of => String, :default => nil
-# attribute :admin_user, :kind_of => String, :default => nil
-# attribute :admin_pubkey, :kind_of => String, :default => nil
-# attribute :network, :kind_of => String, :default => nil
-# attribute :execute, :kind_of => String, :default => nil
 
