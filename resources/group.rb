@@ -1,4 +1,4 @@
-actions :join
+actions :join, :execute
 
 def initialize(*args)
   super
@@ -10,3 +10,4 @@ attribute :user, :kind_of => String, :default => nil
 attribute :admin_user, :kind_of => String, :default => nil
 attribute :admin_pubkey, :kind_of => String, :default => nil
 attribute :network, :kind_of => String, :default => nil
+attribute :execute, :kind_of => String, :default => nil

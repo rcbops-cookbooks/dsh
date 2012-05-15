@@ -192,3 +192,32 @@ def configure_users()
     f.run_action(:create)
   }
 end
+
+action :execute do
+  def shell_escape(s)
+    return "'" + s.gsub(/\'/, "'\"'\"'") + "'"
+  end
+  if current_resource.admin_user then
+    new_resource.admin_user = current_resource.admin_user
+    new_resource.user = current_resource.user
+    new_resource.admin_pubkey = current_resource.admin_pubkey
+    new_resource.network = current_resource.network
+    if not new_resource.execute then
+      raise "Nothing to execute"
+    end
+    cmd = "pssh -h ~/.dsh/group/#{new_resource.name} " +
+      "#{shell_escape(new_resource.execute)}"
+    Chef::Log.info("I would run #{cmd}"
+  else
+    raise "Attempted to execute a distributed ssh command from a non-admin node"
+  end
+  
+
+
+  attribute :group, :kind_of => String, :name_attribute => true
+  attribute :user, :kind_of => String, :default => nil
+  attribute :admin_user, :kind_of => String, :default => nil
+  attribute :admin_pubkey, :kind_of => String, :default => nil
+  attribute :network, :kind_of => String, :default => nil
+  attribute :execute, :kind_of => String, :default => nil
+  
