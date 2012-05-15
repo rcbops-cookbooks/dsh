@@ -4,6 +4,6 @@ dsh_group "testing" do
 end
 
 dsh_group "testing" do
-  execute "hostname"
+  execute "hostname > /tmp/hostname"
   action :execute
 end

@@ -57,11 +57,11 @@ action :join do
 
   if new_resource.admin_user
     #Admin node configure ability to log in to members.
-    node['dsh']['admin_groups'][new_resource.name]['admin_user'] =
-      new_resource.admin_user
     home = get_home(new_resource.admin_user)
     get_pubkey(home)
     new_resource.updated_by_last_action(true)
+    node['dsh']['admin_groups'][new_resource.name]['admin_user'] =
+      new_resource.admin_user
 
     #Remove hosts that are no longer in the list
     old_hosts = node['dsh']['hosts']
@@ -148,7 +148,7 @@ def configure_users()
   users = []
   users << new_resource.user if new_resource.user
   users << new_resource.admin_user if new_resource.admin_user
-  users.each { |u|
+  users.each do |u|
     if not u == "root"
       user_p = user u do
         shell "/bin/bash"
@@ -195,11 +195,11 @@ def configure_users()
       action :create
     end
     f.run_action(:create)
-  }
+  end
+  node.save
 end
 
 action :execute do
-  Chef::Log.info("Howdy from :execute -- #{PP.pp(new_resource,dump='')}, current: #{PP.pp(current_resource,dump='')}")
   admin_user = node['dsh']['admin_groups'][new_resource.name]['admin_user']
   home = get_home(admin_user)
   def shell_escape(s)
