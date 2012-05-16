@@ -63,26 +63,17 @@ action :join do
     node['dsh']['admin_groups'][new_resource.name]['admin_user'] =
       new_resource.admin_user
 
-    #Remove hosts that are no longer in the list
-    old_hosts = node['dsh']['hosts']
     hosts = []
     members.each do |n|
       hosts << {"name" => n['dsh']['groups'][new_resource.name]['access_name'],
         "key" => n['dsh']['host_key']}
-    end
-    remove_hosts = old_hosts - hosts
-    remove_hosts.each do |h|
-      execute "ssh-keygen -R #{h['name']}" do
-        Chef::Log.info("Removing known host #{h['name']}")
-        user new_resource.admin_user
-      end
     end
 
     #Add new hosts to known_hosts
     f = ::File.new("#{home}/.ssh/known_hosts", "a")
     hosts.each do |h|
       if `su #{new_resource.admin_user} -c 'ssh-keygen -F #{h['name']}' | wc -l`.strip == "0"
-        Chef::Log.info("Adding known host #{h['name']}")
+        Chef::Log.info("Adding known host #{h['name']} to #{f.path}")
         f.write("#{h['name']} #{h['key']}\n")
       end
     end
