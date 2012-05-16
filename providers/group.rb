@@ -196,12 +196,16 @@ action :execute do
   def shell_escape(s)
     return "'" + s.gsub(/\'/, "'\"'\"'") + "'"
   end
-  
-  cmd = "parallel-ssh -h #{home}/.dsh/group/#{new_resource.name} " +
-    "#{shell_escape(new_resource.execute)}"
-  Chef::Log.info("Executing #{cmd}")
-  execute cmd do
-    user admin_user
+  members = find_dsh_group_members(new_resource.name)
+  if members.length > 0 then
+    cmd = "parallel-ssh -h #{home}/.dsh/group/#{new_resource.name} " +
+      "#{shell_escape(new_resource.execute)}"
+    Chef::Log.info("Executing #{cmd}")
+    execute cmd do
+      user admin_user
+    end
+  else
+    Chef::Log.info("No members in group #{new_resource.name}")
   end
 end
 
