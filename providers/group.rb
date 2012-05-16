@@ -193,12 +193,20 @@ end
 action :execute do
   admin_user = node['dsh']['admin_groups'][new_resource.name]['admin_user']
   home = get_home(admin_user)
+  pssh_cmd = case node["platform"]
+             when "centos","redhat","fedora","scientific","amazon"
+               "pssh"
+             when "debian", "ubuntu"
+               "parallel-ssh"
+             end
+
   def shell_escape(s)
     return "'" + s.gsub(/\'/, "'\"'\"'") + "'"
   end
+
   members = find_dsh_group_members(new_resource.name)
   if members.length > 0 then
-    cmd = "parallel-ssh -h #{home}/.dsh/group/#{new_resource.name} " +
+    cmd = "#{pssh_cmd} -h #{home}/.dsh/group/#{new_resource.name} " +
       shell_escape(new_resource.execute)
     Chef::Log.info("Executing #{cmd}")
     execute cmd do
