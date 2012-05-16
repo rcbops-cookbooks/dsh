@@ -199,7 +199,7 @@ action :execute do
   members = find_dsh_group_members(new_resource.name)
   if members.length > 0 then
     cmd = "parallel-ssh -h #{home}/.dsh/group/#{new_resource.name} " +
-      "#{shell_escape(new_resource.execute)}"
+      shell_escape(new_resource.execute)
     Chef::Log.info("Executing #{cmd}")
     execute cmd do
       user admin_user
