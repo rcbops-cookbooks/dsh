@@ -119,7 +119,7 @@ def get_pubkey(home)
   privkey_path = "#{home}/.ssh/id_rsa"
   pubkey_path = "#{privkey_path}.pub"
   if not (::File.exists? privkey_path or ::File.exists? pubkey_path)
-    Chef::Log.info("Generating ssh keys for user #{new_resource.admin_user}")
+    Chef::Log.info("Generating ssh keys for user #{new_resource.admin_user} from #{privkey_path} and #{pubkey_path}")
     system("su #{new_resource.admin_user} -c 'ssh-keygen -q -f #{privkey_path} " +
            "-P \"\"'", :in=>"/dev/null")
     new_resource.updated_by_last_action(true)
@@ -140,7 +140,10 @@ def configure_users()
   users << new_resource.user if new_resource.user
   users << new_resource.admin_user if new_resource.admin_user
   users.each do |u|
-    if not u == "root"
+    # TODO(wilk): fix this section
+    # special cases for root and nova users.  Do not create either
+    # of these users
+    if not (u == "root" or u == "nova")
       user_p = user u do
         shell "/bin/bash"
         home "/home/#{u}"
@@ -155,6 +158,8 @@ def configure_users()
         action :create
       end
       d.run_action(:create)
+    else
+      home = get_home(u)
     end
     d = directory "#{home}/.ssh" do
       owner u

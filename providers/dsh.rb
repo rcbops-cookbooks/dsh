@@ -144,7 +144,10 @@ def configure_users()
   users << new_resource.user if new_resource.user
   users << new_resource.admin_user if new_resource.admin_user
   users.each { |u|
-    if not u == "root"
+    # TODO(wilk): fix this section
+    # special cases for root and nova users.  Do not create either
+    # of these users
+    if not (u == "root" or u == "nova")
         user_p = user u do
         shell "/bin/bash"
         home "/home/#{u}"
@@ -159,6 +162,8 @@ def configure_users()
         action :create
       end
       d.run_action(:create)
+    else
+      home = get_home(u)
     end
     d = directory "#{home}/.ssh" do
       owner u
