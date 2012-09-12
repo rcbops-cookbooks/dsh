@@ -27,10 +27,14 @@ end
 action :join do
   Chef::Log.info("Howdy from :join -- #{PP.pp(new_resource,dump='')}, current: #{PP.pp(current_resource,dump='')}")
 
-  Package "pssh" do
-    only_if { new_resource.admin_user}
-    action :upgrade
-    only_if { platform?("ubuntu","debian") }
+  platform_options=node["pssh"]["platform"]
+
+  platform_options["pssh_packages"].each do |pkg|
+    package pkg do
+      action :upgrade
+      options platform_options["package_overrides"]
+      only_if { platform?(%w{ubuntu debian}) }    
+    end
   end
 
   configure_users
