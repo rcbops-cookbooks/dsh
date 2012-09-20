@@ -6,7 +6,7 @@ default["dsh"]["hosts"] = []                # node_attribute
 case platform
 when "fedora", "redhat", "centos"
   default["pssh"]["platform"] = {
-    "pssh_packages" => ["pdsh-mod-dshgroup"]
+    "pssh_packages" => ["pdsh","pdsh-rcmd-ssh","pdsh-mod-dshgroup"]
   }
 when "ubuntu"
   default["pssh"]["platform"] = {
