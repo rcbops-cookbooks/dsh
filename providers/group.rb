@@ -33,7 +33,7 @@ action :join do
     package pkg do
       action :upgrade
       options platform_options["package_overrides"]
-      only_if { platform?(%w{ubuntu debian}) }    
+      #only_if { platform?(%w{ubuntu debian}) }    
     end
   end
 
