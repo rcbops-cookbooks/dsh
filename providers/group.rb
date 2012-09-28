@@ -224,7 +224,7 @@ action :execute do
   home = get_home(admin_user)
   pssh_cmd = case node["platform"]
              when "centos","redhat","fedora","scientific","amazon"
-               "pssh"
+               "pdsh"
              when "debian", "ubuntu"
                "parallel-ssh"
              end
