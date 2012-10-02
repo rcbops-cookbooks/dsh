@@ -236,7 +236,7 @@ action :execute do
   end
 
   group_file = "#{home}/.dsh/group/#{new_resource.name}"
-  cmd = "#{pssh_cmd} ${pssh_opt} #{group_file} #{shell_escape(new_resource.execute)}"
+  cmd = "#{pssh_cmd} #{pssh_opt} #{group_file} #{shell_escape(new_resource.execute)}"
   Chef::Log.info("Executing #{cmd}")
   execute cmd do
     user admin_user
