@@ -222,19 +222,21 @@ end
 action :execute do
   admin_user = node['dsh']['admin_groups'][new_resource.name]['admin_user']
   home = get_home(admin_user)
-  pssh_cmd = case node["platform"]
-             when "centos","redhat","fedora","scientific","amazon"
-               "pdsh"
-             when "debian", "ubuntu"
-               "parallel-ssh"
-             end
+  case node["platform"]
+  when "centos","redhat","fedora","scientific","amazon"
+    pssh_cmd="pdsh"
+    pssh_opt="-g"
+  when "debian", "ubuntu"
+    pssh_cmd="parallel-ssh"
+    pssh_opt="-h"
+  end
 
   def shell_escape(s)
     return "'" + s.gsub(/\'/, "'\"'\"'") + "'"
   end
 
   group_file = "#{home}/.dsh/group/#{new_resource.name}"
-  cmd = "#{pssh_cmd} -h #{group_file} #{shell_escape(new_resource.execute)}"
+  cmd = "#{pssh_cmd} #{pssh_opt} #{group_file} #{shell_escape(new_resource.execute)}"
   Chef::Log.info("Executing #{cmd}")
   execute cmd do
     user admin_user
