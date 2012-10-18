@@ -230,7 +230,7 @@ action :execute do
     pssh_opt="-g #{new_resource.name}"
   when "debian", "ubuntu"
     pssh_cmd="parallel-ssh"
-    pssh_opt="-h #{group_file} -p 32 -t 60"
+    pssh_opt="-h #{group_file} -p 32 -t 120"
   end
 
   def shell_escape(s)
