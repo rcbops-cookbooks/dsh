@@ -31,7 +31,7 @@ action :join do
 
   platform_options["pssh_packages"].each do |pkg|
     package pkg do
-      action :upgrade
+      action :install
       options platform_options["package_overrides"]
       #only_if { platform?(%w{ubuntu debian}) }    
     end

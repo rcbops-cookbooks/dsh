@@ -26,7 +26,7 @@ end
 action :join do
   Package "dsh" do
     only_if { new_resource.admin_user}
-    action :upgrade
+    action :install
     only_if { platform?("ubuntu","debian") }
   end
 
