@@ -38,11 +38,11 @@ action :join do
   if new_resource.user
     #Member node: allow logins from admin_users
     #Join group by setting appropriate attributes
-    node["dsh"]["groups"][new_resource.name] = {}
-    node["dsh"]["groups"][new_resource.name]["user"] = new_resource.user
-    node["dsh"]["groups"][new_resource.name]["access_name"] = node['fqdn']
+    node.set["dsh"]["groups"][new_resource.name] = {}
+    node.set["dsh"]["groups"][new_resource.name]["user"] = new_resource.user
+    node.set["dsh"]["groups"][new_resource.name]["access_name"] = node['fqdn']
     if new_resource.network
-      node["dsh"]["groups"][new_resource.name]["access_name"] = 
+      node.set["dsh"]["groups"][new_resource.name]["access_name"] =
         ::Chef::Recipe::IPManagement.get_ip_for_net(new_resource.network, node)
     end
     home = get_home(new_resource.user)
@@ -55,8 +55,7 @@ action :join do
       n['dsh']['admin_groups'][new_resource.name]['pubkey']
     end
     keys += group_keys
-    node['dsh']['groups'][new_resource.name]['authorized_keys'] ||= []
-    old_keys = node['dsh']['groups'][new_resource.name]['authorized_keys']
+    old_keys = node['dsh']['groups'][new_resource.name]['authorized_keys'] || []
 
     #don't write keys previously in the group that no longer exist.
     keys -= (old_keys - group_keys)
@@ -67,7 +66,7 @@ action :join do
         action :create
     end
     f.run_action(:create)
-    node['dsh']['groups'][new_resource.name]['authorized_keys'] = group_keys
+    node.set['dsh']['groups'][new_resource.name]['authorized_keys'] = group_keys
 
     new_resource.updated_by_last_action(true)
   end
@@ -102,7 +101,7 @@ action :join do
       end
     end
     f.close()
-    node['dsh']['hosts'] = hosts 
+    node.set['dsh']['hosts'] = hosts
 
     #Configure dsh
     f = ::File.new("#{home}/.dsh/group/#{new_resource.name}", "w")
@@ -120,7 +119,7 @@ def update_host_key()
   host_key = ::File.read("/etc/ssh/ssh_host_rsa_key.pub").strip
   if host_key != node["dsh"]["host_key"]
     Chef::Log.info("Updating host key to #{host_key}")
-    node["dsh"]["host_key"] = host_key
+    node.set["dsh"]["host_key"] = host_key
     new_resource.updated_by_last_action(true)
   end
 end
@@ -149,10 +148,10 @@ def get_pubkey(home)
     new_resource.updated_by_last_action(true)
   end
   pubkey = ::File.read("#{home}/.ssh/id_rsa.pub").strip
-  node["dsh"]["admin_groups"][new_resource.name] ||= {}
+  node.set["dsh"]["admin_groups"][new_resource.name] ||= {}
   if pubkey != node["dsh"]["admin_groups"][new_resource.name]["pubkey"]
     Chef::Log.info("Updating pubkey for admin_user #{new_resource.admin_user}")
-    node["dsh"]["admin_groups"][new_resource.name] = {
+    node.set["dsh"]["admin_groups"][new_resource.name] = {
       "user" => new_resource.admin_user,
       "pubkey" => pubkey
     }
