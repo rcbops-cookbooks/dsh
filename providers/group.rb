@@ -7,9 +7,9 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -33,7 +33,7 @@ action :join do
     package pkg do
       action :install
       options platform_options["package_overrides"]
-      #only_if { platform?(%w{ubuntu debian}) }    
+      #only_if { platform?(%w{ubuntu debian}) }
     end
   end
 
@@ -141,13 +141,21 @@ end
 def get_pubkey(home)
   privkey_path = "#{home}/.ssh/id_rsa"
   pubkey_path = "#{privkey_path}.pub"
-  if not (::File.exists? privkey_path or ::File.exists? pubkey_path)
+  priv = ::File.exists? privkey_path
+  pub =::File.exists? pubkey_path
+  if priv and not pub
+    Chef::Log.info("Generating pubkey for #{privkey_path}")
+    system("su #{new_resource.admin_user} -c 'ssh-keygen -y -f #{privkey_path} > #{pubkey_path}'")
+    new_resource.updated_by_last_action(true)
+  elsif pub and not priv
+    Chef::Application.fatal!("#{pubkey_path} exists, but its private key is missing.  Either create the matching #{privkey_path} file or remove #{pubkey_path}")
+  elsif not pub and not priv
     Chef::Log.info("Generating ssh keys for user #{new_resource.admin_user} from #{privkey_path} and #{pubkey_path}")
     system("su #{new_resource.admin_user} -c 'ssh-keygen -q -f #{privkey_path} " +
            "-P \"\"'", :in=>"/dev/null")
     new_resource.updated_by_last_action(true)
   end
-  pubkey = ::File.read("#{home}/.ssh/id_rsa.pub").strip
+  pubkey = ::File.read(pubkey_path).strip
   node.set["dsh"]["admin_groups"][new_resource.name] ||= {}
   if pubkey != node["dsh"]["admin_groups"][new_resource.name]["pubkey"]
     Chef::Log.info("Updating pubkey for admin_user #{new_resource.admin_user}")
@@ -243,4 +251,3 @@ action :execute do
     only_if "wc -l #{group_file} | grep -v '^0 '"
   end
 end
-
