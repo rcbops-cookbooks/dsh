@@ -17,7 +17,7 @@
 # limitations under the License.
 #
 
-require 'set'
+require "set"
 require "pp"
 
 if Chef::Config[:solo]
@@ -25,7 +25,7 @@ if Chef::Config[:solo]
 end
 
 action :join do
-  Chef::Log.info("Howdy from :join -- #{PP.pp(new_resource,dump='')}, current: #{PP.pp(current_resource,dump='')}")
+  Chef::Log.info("Howdy from :join -- #{PP.pp(new_resource, dump='')}, current: #{PP.pp(current_resource, dump='')}")
 
   platform_options=node["pssh"]["platform"]
 
@@ -33,7 +33,6 @@ action :join do
     package pkg do
       action :install
       options platform_options["package_overrides"]
-      #only_if { platform?(%w{ubuntu debian}) }
     end
   end
 
@@ -57,7 +56,7 @@ action :join do
     authorized = []
 
     #configure authorized_keys
-    keys = Set.new(::File.new(auth_key_file, "r").read().split(/\n/))
+    keys = Set.new(::File.read(auth_key_file).split(/\n/))
     group_keys = admins.collect() do |n|
       n['dsh']['admin_groups'][new_resource.name]['pubkey']
     end
@@ -69,7 +68,7 @@ action :join do
     f = file "#{home}/.ssh/authorized_keys" do
       owner new_resource.user
       group new_resource.user
-      content keys.collect {|k| k}.join("\n")
+      content keys.collect { |k| k }.join("\n")
       action :create
     end
     f.run_action(:create)
@@ -88,8 +87,10 @@ action :join do
 
     hosts = []
     members.each do |n|
-      hosts << {"name" => n['dsh']['groups'][new_resource.name]['access_name'],
-        "key" => n['dsh']['host_key']}
+      hosts << {
+        "name" => n['dsh']['groups'][new_resource.name]['access_name'],
+        "key" => n['dsh']['host_key']
+      }
     end
 
     #Add new hosts to known_hosts
@@ -107,8 +108,10 @@ action :join do
     f = ::File.new("#{home}/.dsh/group/#{new_resource.name}", "w")
     members.each do |n|
       Chef::Log.info("Adding #{n.name} to dsh group #{new_resource.name}")
-      f.write("#{n['dsh']['groups'][new_resource.name]['user']}@" +
-              "#{n['dsh']['groups'][new_resource.name]['access_name']}\n")
+      f.write(
+        "#{n['dsh']['groups'][new_resource.name]['user']}@" +
+          "#{n['dsh']['groups'][new_resource.name]['access_name']}\n"
+      )
     end
     f.close()
   end
@@ -125,13 +128,17 @@ def update_host_key()
 end
 
 def find_dsh_group_members(name)
-  return search(:node, "dsh_groups:#{new_resource.name} AND " +
-                "chef_environment:#{node.chef_environment}")
+  return search(
+    :node,
+    "dsh_groups:#{new_resource.name} AND chef_environment:#{node.chef_environment}"
+  )
 end
 
 def find_dsh_group_admins(name)
-  return search(:node, "dsh_admin_groups:#{new_resource.name} " +
-                "AND chef_environment:#{node.chef_environment}")
+  return search(
+    :node,
+    "dsh_admin_groups:#{new_resource.name} AND chef_environment:#{node.chef_environment}"
+  )
 end
 
 def get_home(user)
@@ -139,20 +146,23 @@ def get_home(user)
 end
 
 def get_pubkey(home)
-  privkey_path = "#{home}/.ssh/id_rsa"
-  pubkey_path = "#{privkey_path}.pub"
-  priv = ::File.exists? privkey_path
-  pub =::File.exists? pubkey_path
+  privkey_path, pubkey_path = "#{home}/.ssh/id_rsa", "#{home}/.ssh/id_rsa.pub"
+  priv, pub = ::File.exists?(privkey_path), ::File.exists?(pubkey_path)
   if priv and not pub
     Chef::Log.info("Generating pubkey for #{privkey_path}")
     system("su #{new_resource.admin_user} -c 'ssh-keygen -y -f #{privkey_path} > #{pubkey_path}'")
     new_resource.updated_by_last_action(true)
   elsif pub and not priv
-    Chef::Application.fatal!("#{pubkey_path} exists, but its private key is missing.  Either create the matching #{privkey_path} file or remove #{pubkey_path}")
+    Chef::Application.fatal!(
+      "#{pubkey_path} exists, but its private key is missing.  " +
+        "Either create the matching #{privkey_path} file or remove #{pubkey_path}"
+    )
   elsif not pub and not priv
     Chef::Log.info("Generating ssh keys for user #{new_resource.admin_user} from #{privkey_path} and #{pubkey_path}")
-    system("su #{new_resource.admin_user} -c 'ssh-keygen -q -f #{privkey_path} " +
-           "-P \"\"'", :in=>"/dev/null")
+    system(
+      "su #{new_resource.admin_user} -c 'ssh-keygen -q -f #{privkey_path} " +
+        "-P \"\"'", :in=>"/dev/null"
+    )
     new_resource.updated_by_last_action(true)
   end
   pubkey = ::File.read(pubkey_path).strip
@@ -174,14 +184,13 @@ def configure_users()
     # TODO(wilk): fix this section
     # special cases for root and nova users.  Do not create either
     # of these users
-    if not (u == "root" or u == "nova")
+    if !(u == "root" or u == "nova")
       user_p = user u do
         shell "/bin/bash"
         home "/home/#{u}"
       end
       user_p.run_action(:create)
       home = get_home(u)
-      rs = []
       d = directory home do
         owner u
         group u
@@ -192,38 +201,46 @@ def configure_users()
     else
       home = get_home(u)
     end
-    d = directory "#{home}/.ssh" do
-      owner u
-      group u
-      action :create
-    end
-    d.run_action(:create)
-    home = get_home(u)
-    ["#{home}/.ssh/authorized_keys", "#{home}/.ssh/known_hosts"].each do |i|
-      f = file i do
-        owner u
-        group u
-        action :create
-      end
-      f.run_action(:create)
-    end
-    d = directory "#{home}/.dsh/group" do
-      only_if { u == new_resource.admin_user}
-      owner u
-      group u
-      recursive true
-      action :create
-    end
-    d.run_action(:create)
-    f = file "#{home}/.dsh/group/#{new_resource.name}" do
-      only_if { u == new_resource.admin_user}
-      owner u
-      group u
+
+    create_ssh_directories(u, home)
+    create_dsh_information(u, home, new_resource)
+  end
+  node.save
+end
+
+def create_ssh_directories(user, home)
+  d = directory "#{home}/.ssh" do
+    owner user
+    group user
+    action :create
+  end
+  d.run_action(:create)
+  ["#{home}/.ssh/authorized_keys", "#{home}/.ssh/known_hosts"].each do |i|
+    f = file i do
+      owner user
+      group user
       action :create
     end
     f.run_action(:create)
   end
-  node.save
+end
+
+def create_dsh_information(user, home, resource)
+  d = directory "#{home}/.dsh/group" do
+    only_if { user == resource.admin_user }
+    owner user
+    group user
+    recursive true
+    action :create
+  end
+  d.run_action(:create)
+  f = file "#{home}/.dsh/group/#{resource.name}" do
+    only_if { user == resource.admin_user }
+    owner user
+    group user
+    action :create
+  end
+  f.run_action(:create)
 end
 
 action :execute do
@@ -231,11 +248,10 @@ action :execute do
   home = get_home(admin_user)
   group_file = "#{home}/.dsh/group/#{new_resource.name}"
 
-  case node["platform"]
-  when "centos","redhat","fedora","scientific","amazon"
+  if node.platform_family?("rhel")
     pssh_cmd="pdsh"
     pssh_opt="-g #{new_resource.name}"
-  when "debian", "ubuntu"
+  elsif node.platform_family?("debian")
     pssh_cmd="parallel-ssh"
     pssh_opt="-h #{group_file} -p 32 -t 120"
   end
