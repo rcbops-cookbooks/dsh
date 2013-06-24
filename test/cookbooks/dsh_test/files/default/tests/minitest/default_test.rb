@@ -1,6 +1,6 @@
 #
-# Cookbook Name:: dsh
-# Attributes:: default
+# Cookbook Name:: dsh_test
+# Recipe:: default
 #
 # Copyright 2012, Rackspace US, Inc.
 #
@@ -17,17 +17,8 @@
 # limitations under the License.
 #
 
-default["dsh"]["groups"] = {}               # node_attribute
-default["dsh"]["admin_groups"] = {}         # node_attribute
-default["dsh"]["host_key"] = ""             # node_attribute
-default["dsh"]["hosts"] = []                # node_attribute
+require_relative "./support/helpers"
 
-if platform_family?("rhel")
-  default["pssh"]["platform"] = {
-    "pssh_packages" => ["pdsh", "pdsh-rcmd-ssh", "pdsh-mod-dshgroup"]
-  }
-elsif platform_family?("debian")
-  default["pssh"]["platform"] = {
-    "pssh_packages" => ["pssh"]
-  }
+describe_recipe "dsh_test::default" do
+  include DshTestHelpers
 end
