@@ -140,6 +140,18 @@ describe "dsh::default" do
       File.read("#{admin_user_home}/.ssh/known_hosts").should eq "memberhost memberhostkey\n"
       File.read("#{admin_user_home}/.dsh/group/testing").should eq "memberuser@memberhost\n"
     end
+
+    context "with user hashes" do
+      let(:chef_run) { runner.converge "dsh_test::group_provider_hashes" }
+
+      it "applies the hash options to the user resource" do
+        chef_run.should create_user("test")
+        chef_run.user("test").uid.should == 200
+
+        chef_run.should create_user("admin")
+        chef_run.user("admin").uid.should == 300
+      end
+    end
   end
 
   describe ":execute" do
