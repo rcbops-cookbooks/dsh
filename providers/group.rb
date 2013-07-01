@@ -179,7 +179,7 @@ end
 
 def configure_users()
   users = {}
-  [new_resource.user, new_resource.admin_user].map do |user|
+  [new_resource.user, new_resource.admin_user].compact.map do |user|
     users[get_user_name(user)] = get_user_options(user)
   end
 
@@ -250,7 +250,7 @@ def create_dsh_information(user, home, resource)
 end
 
 def get_user_name(user)
-  if user.instance_of?(Hash)
+  if user.kind_of?(Hash)
     user["username"] || user[:username] || user["name"] || user[:name]
   else
     user
@@ -258,8 +258,8 @@ def get_user_name(user)
 end
 
 def get_user_options(user)
-  if user.instance_of?(Hash)
-    user
+  if user.kind_of?(Hash)
+    user.to_hash
   else
     {}
   end
