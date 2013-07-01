@@ -18,17 +18,6 @@ Description
 ===========
 dsh is a lwrp? for setting up dsh group files and mapping permissions between user accounts and administrative users to allow easy bootstrapping of distributed access to a group of nodes via dsh.
 
-Recipes
-=======
-
-test
--------
-The test recipe is a placeholder for a specific user/group setup with the following attributes:
-
-- group: testing
-- user: test1
-- admin_user: test2
-
 Resources/Providers
 ===================
 There's currently one provider, "group", which does all the heavy lifting.
@@ -55,6 +44,12 @@ Usage
     user "test2"
     admin_user "test1"
     #provider "dsh_group"  # default?
+  end
+
+  # user/admin_user also accept a hash of resource attributes
+  dsh_group "testing" do
+    user :username => "test2", :uid => 2000, :comment = "Test User 2"
+    admin_user "test1"
   end
 
 License and Author

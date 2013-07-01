@@ -82,7 +82,7 @@ action :join do
     username = get_user_name(new_resource.admin_user)
     #Admin node configure ability to log in to members.
     home = get_home(username)
-    get_pubkey(home)
+    get_pubkey(home, username)
     new_resource.updated_by_last_action(true)
     node.set['dsh']['admin_groups'][new_resource.name]['admin_user'] = username
 
@@ -146,8 +146,7 @@ def get_home(username)
   ::File.expand_path "~#{username}"
 end
 
-def get_pubkey(home)
-  username = get_user_name(new_resource.admin_user)
+def get_pubkey(home, username)
   privkey_path, pubkey_path = "#{home}/.ssh/id_rsa", "#{home}/.ssh/id_rsa.pub"
   priv, pub = ::File.exists?(privkey_path), ::File.exists?(pubkey_path)
   if priv and not pub
@@ -180,11 +179,8 @@ end
 
 def configure_users()
   users = {}
-  [new_resource.user, new_resource.admin_user].each do |user|
-    username = get_user_name(user)
-    options  = get_user_options(user)
-
-    users[username] = options
+  [new_resource.user, new_resource.admin_user].map do |user|
+    users[get_user_name(user)] = get_user_options(user)
   end
 
   users.each do |u, o|
@@ -196,10 +192,8 @@ def configure_users()
         shell "/bin/bash"
         home "/home/#{u}"
       end
-      o.each do |k,v|
-        user_p.send(k, v) if user_p.respond_to?(k)
-      end
-      
+      o.each { |k, v| user_p.send(k, v) if user_p.respond_to?(k) }
+
       user_p.run_action(:create)
       home = get_home(u)
       d = directory home do
