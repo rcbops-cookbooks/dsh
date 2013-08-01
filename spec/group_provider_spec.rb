@@ -59,7 +59,7 @@ describe "dsh::default" do
         with(:node, "dsh_admin_groups:testing AND chef_environment:#{node.chef_environment}").
         and_return(admin_group_results)
 
-      node.should_receive("save")
+      #node.should_receive("save")
     end
 
     it "installs platform packages" do
