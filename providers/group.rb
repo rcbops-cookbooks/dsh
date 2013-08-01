@@ -50,7 +50,7 @@ action :join do
   # join group by setting attributes ('user' and 'access_name').
   if new_resource.user
     Chef::Log.debug("dsh_group: i'm a member! setting user attributes")
-    node.set["dsh"]["groups"][new_resource.name] = {}
+    node.set_unless["dsh"]["groups"][new_resource.name] = {}
     node.set["dsh"]["groups"][new_resource.name]["user"] =
       get_user_name(new_resource.user)
 
