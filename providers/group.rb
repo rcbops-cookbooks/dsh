@@ -25,10 +25,10 @@ if Chef::Config[:solo]
 end
 
 action :join do
-  Chef::Log.info("Howdy from :join -- #{PP.pp(new_resource, dump='')}, current: #{PP.pp(current_resource, dump='')}")
+  Chef::Log.debug("Howdy from :join -- #{PP.pp(new_resource, dump='')}, " +
+    "current: #{PP.pp(current_resource, dump='')}")
 
   platform_options=node["pssh"]["platform"]
-
   platform_options["pssh_packages"].each do |pkg|
     package pkg do
       action :install
@@ -36,55 +36,103 @@ action :join do
     end
   end
 
+  # TODO(brett) configure_users() is called regardless of whether
+  #     `new_resource' specifies any user attributes or not. This method
+  #     then calls create_dsh_information(), which uses only_if in its
+  #     resources to restrict convergence based on the presence of
+  #     `admin_user' attribute.  It works fine (effective noop in the
+  #     case of nil user attributes), but seems like it could be done
+  #     more clearly and less indirectly.
   configure_users
   update_host_key
-  admins = find_dsh_group_admins(new_resource.name)
-  members = find_dsh_group_members(new_resource.name)
 
+  # If we are a member node,
+  # join group by setting attributes ('user' and 'access_name').
   if new_resource.user
-    username = get_user_name(new_resource.user)
-    #Member node: allow logins from admin_users
-    #Join group by setting appropriate attributes
+    Chef::Log.debug("dsh_group: i'm a member! setting user attributes")
     node.set["dsh"]["groups"][new_resource.name] = {}
-    node.set["dsh"]["groups"][new_resource.name]["user"] = username
-    node.set["dsh"]["groups"][new_resource.name]["access_name"] = node['fqdn']
+    node.set["dsh"]["groups"][new_resource.name]["user"] =
+      get_user_name(new_resource.user)
+
     if new_resource.network
+      ip = ::Chef::Recipe::IPManagement.get_ip_for_net(new_resource.network, node)
+      Chef::Log.debug("dsh_group: setting access_name to #{ip}")
+      node.set["dsh"]["groups"][new_resource.name]["access_name"] = ip
+    else
+      Chef::Log.debug("dsh_group: setting access_name to #{node['fqdn']}")
       node.set["dsh"]["groups"][new_resource.name]["access_name"] =
-        ::Chef::Recipe::IPManagement.get_ip_for_net(new_resource.network, node)
+        node['fqdn']
     end
-    home = get_home(username)
-    auth_key_file = "#{home}/.ssh/authorized_keys"
-    authorized = []
-
-    #configure authorized_keys
-    keys = Set.new(::File.read(auth_key_file).split(/\n/))
-    group_keys = admins.collect() do |n|
-      n['dsh']['admin_groups'][new_resource.name]['pubkey']
-    end
-    keys += group_keys
-    old_keys = node['dsh']['groups'][new_resource.name]['authorized_keys'] || []
-
-    #don't write keys previously in the group that no longer exist.
-    keys -= (old_keys - group_keys)
-    f = file "#{home}/.ssh/authorized_keys" do
-      group username
-      group username
-      content keys.collect { |k| k }.join("\n")
-      action :create
-    end
-    f.run_action(:create)
-    node.set['dsh']['groups'][new_resource.name]['authorized_keys'] = group_keys
-
-    new_resource.updated_by_last_action(true)
   end
 
+  # If we are an admin node,
+  # generate pubkey and set admin attributes ('pubkey' and 'admin_user').
   if new_resource.admin_user
-    username = get_user_name(new_resource.admin_user)
-    #Admin node configure ability to log in to members.
-    home = get_home(username)
-    get_pubkey(home, username)
+    Chef::Log.debug("dsh_group: i'm an admin! setting user attributes")
+    user = get_user_name(new_resource.admin_user)
+    node.set['dsh']['admin_groups'][new_resource.name]['admin_user'] = user
+    configure_pubkey(get_home(user), user)  # sets node attribute
+  end
+
+  #########################################################################
+  # Now that our node attributes are set, proceed with node searches and
+  # generate openssh/dsh files
+  #########################################################################
+
+  # Find all admin nodes and write their pubkeys to authorized_keys
+  if new_resource.user
+    # read existing keys from file
+    user = get_user_name(new_resource.user)
+    home = get_home(user)
+    file = "#{home}/.ssh/authorized_keys"
+    keys = Set.new(::File.read(file).split(/\n/))
+
+    # collect keys from admin nodes
+    group_keys = find_dsh_group_admins(new_resource.name).collect do |n|
+      n['dsh']['admin_groups'][new_resource.name]['pubkey']
+    end
+
+    # fetch keys previously persisted to chef server
+    old_keys = node['dsh']['groups'][new_resource.name]['authorized_keys'] || []
+
+    # find stale keys from old hosts
+    stale_keys = old_keys - group_keys
+
+    Chef::Log.debug("dsh_group: search results for admin keys: #{group_keys}")
+    Chef::Log.debug("dsh_group: local keys from #{file}: #{keys.inspect}")
+    Chef::Log.debug("dsh_group: previously cached keys: #{old_keys}")
+    Chef::Log.debug("dsh_group: stale keys: #{stale_keys}")
+
+    # purge stale keys
+    keys -= stale_keys
+
+    # graft in current admin keys
+    # ('keys' is a Set; won't contain dups)
+    keys += group_keys
+
+    # persist current admin keys back to server
+    node.set['dsh']['groups'][new_resource.name]['authorized_keys'] = group_keys
+
+    # write the authorized_keys file
+    Chef::Log.debug("dsh_group: writing admin keys to #{file}: #{keys.inspect}")
+    f = file "#{home}/.ssh/authorized_keys" do
+      owner user
+      group user
+      content keys.collect { |k| k }.join("\n")
+    end
+    f.run_action(:create)
     new_resource.updated_by_last_action(true)
-    node.set['dsh']['admin_groups'][new_resource.name]['admin_user'] = username
+  end # if new_resource.user
+
+  # Find all members and write them to known_hosts and .dsh/group/
+  if new_resource.admin_user
+    user = get_user_name(new_resource.admin_user)
+    home = get_home(user)
+    ssh_file = "#{home}/.ssh/known_hosts"
+    dsh_file = "#{home}/.dsh/group/#{new_resource.name}"
+
+    members = find_dsh_group_members(new_resource.name)
+    Chef::Log.debug("dsh_group: search results for group members: #{members}")
 
     hosts = []
     members.each do |n|
@@ -93,20 +141,24 @@ action :join do
         "key" => n['dsh']['host_key']
       }
     end
+    # TODO(brett) should this be nested under group name key?
+    # TODO(brett) add logic for multiple dsh groups
+    node.set['dsh']['hosts'] = hosts
 
     #Add new hosts to known_hosts
-    f = ::File.new("#{home}/.ssh/known_hosts", "a")
+    Chef::Log.debug("dsh_group: opening #{ssh_file} in append mode")
+    f = ::File.new(ssh_file, "a")
     hosts.each do |h|
-      if `su #{username} -c 'ssh-keygen -F #{h['name']}' | wc -l`.strip == "0"
+      if `su #{user} -c 'ssh-keygen -F #{h['name']}' | wc -l`.strip == "0"
         Chef::Log.info("Adding known host #{h['name']} to #{f.path}")
         f.write("#{h['name']} #{h['key']}\n")
       end
     end
     f.close()
-    node.set['dsh']['hosts'] = hosts
 
     #Configure dsh
-    f = ::File.new("#{home}/.dsh/group/#{new_resource.name}", "w")
+    Chef::Log.debug("dsh_group: writing to #{dsh_file}")
+    f = ::File.new(dsh_file, "w")
     members.each do |n|
       Chef::Log.info("Adding #{n.name} to dsh group #{new_resource.name}")
       f.write(
@@ -115,9 +167,8 @@ action :join do
       )
     end
     f.close()
-  end
-
-end
+  end # if new_resource.admin_user
+end # action :join
 
 def update_host_key()
   host_key = ::File.read("/etc/ssh/ssh_host_rsa_key.pub").strip
@@ -129,24 +180,42 @@ def update_host_key()
 end
 
 def find_dsh_group_members(name)
-  return search(
+  results = search(
     :node,
     "dsh_groups:#{new_resource.name} AND chef_environment:#{node.chef_environment}"
   )
+  # add ourself to the list if necessary
+  if node['dsh']['admin_groups'].key?(new_resource.name)
+    if not results.map(&:name).include?(node.name)
+      Chef::Log.debug("dsh_group: #{__method__}: " +
+        "i appear to be a group member, adding myself to search results")
+      results << node
+    end
+  end
+  results
 end
 
 def find_dsh_group_admins(name)
-  return search(
+  results = search(
     :node,
     "dsh_admin_groups:#{new_resource.name} AND chef_environment:#{node.chef_environment}"
   )
+  # add ourself to the list if necessary
+  if node['dsh']['admin_groups'].key?(new_resource.name)
+    if not results.map(&:name).include?(node.name)
+      Chef::Log.debug("dsh_group: #{__method__}: " +
+        "i appear to be a group admin, adding myself to search results")
+      results << node
+    end
+  end
+  results
 end
 
 def get_home(username)
   ::File.expand_path "~#{username}"
 end
 
-def get_pubkey(home, username)
+def configure_pubkey(home, username)
   privkey_path, pubkey_path = "#{home}/.ssh/id_rsa", "#{home}/.ssh/id_rsa.pub"
   priv, pub = ::File.exists?(privkey_path), ::File.exists?(pubkey_path)
   if priv and not pub
@@ -193,8 +262,8 @@ def configure_users()
         home "/home/#{u}"
       end
       o.each { |k, v| user_p.send(k, v) if user_p.respond_to?(k) }
-
       user_p.run_action(:create)
+
       home = get_home(u)
       d = directory home do
         owner u
@@ -205,26 +274,24 @@ def configure_users()
       d.run_action(:create)
     else
       home = get_home(u)
-    end
+    end # if !(u=="root" or u=="nova")
 
     create_ssh_directories(u, home)
     create_dsh_information(u, home, new_resource)
-  end
-  node.save
+  end # users.each
 end
 
 def create_ssh_directories(user, home)
   d = directory "#{home}/.ssh" do
     owner user
     group user
-    action :create
   end
   d.run_action(:create)
+
   ["#{home}/.ssh/authorized_keys", "#{home}/.ssh/known_hosts"].each do |i|
     f = file i do
       owner user
       group user
-      action :create
     end
     f.run_action(:create)
   end
@@ -237,14 +304,13 @@ def create_dsh_information(user, home, resource)
     owner user
     group user
     recursive true
-    action :create
   end
   d.run_action(:create)
+
   f = file "#{home}/.dsh/group/#{resource.name}" do
     only_if { user == username }
     owner user
     group user
-    action :create
   end
   f.run_action(:create)
 end
