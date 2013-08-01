@@ -63,6 +63,7 @@ Author:: William Kelly (<william.kelly@rackspace.com>)
 Author:: Darren Birkett (<darren.birkett@rackspace.co.uk>)  
 Author:: Evan Callicoat (<evan.callicoat@rackspace.com>)  
 Author:: Chris Laco (<chris.laco@rackspace.com>)
+Author:: Brett Campbell (<brett.campbell@rackspace.com>)
 
 Copyright 2012-2013, Rackspace US, Inc.  
 
