@@ -24,10 +24,11 @@ if Chef::Config[:solo]
   Chef::Log.warn("This recipe uses search. Chef Solo does not support search.")
 end
 
-action :join do
-  Chef::Log.debug("Howdy from :join -- #{PP.pp(new_resource, dump='')}, " +
-    "current: #{PP.pp(current_resource, dump='')}")
+# Allow embedded resources in this provider to trigger notifications
+use_inline_resources if
+  Gem::Version.new(Chef::VERSION) >= Gem::Version.new('11')
 
+action :join do
   platform_options=node["pssh"]["platform"]
   platform_options["pssh_packages"].each do |pkg|
     package pkg do
@@ -121,7 +122,6 @@ action :join do
       content keys.collect { |k| k }.join("\n")
     end
     f.run_action(:create)
-    new_resource.updated_by_last_action(true)
   end # if new_resource.user
 
   # Find all members and write them to known_hosts and .dsh/group/
@@ -168,6 +168,10 @@ action :join do
     end
     f.close()
   end # if new_resource.admin_user
+
+  Chef::Log.debug("dsh_group: Howdy from :join -- " +
+    "new_resource: #{PP.pp(new_resource,  dump='')}, " +
+    "current_resource: #{PP.pp(current_resource, dump='')}")
 end # action :join
 
 def update_host_key()
