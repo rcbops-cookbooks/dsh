@@ -145,7 +145,7 @@ action :join do
     # TODO(brett) add logic for multiple dsh groups
     node.set['dsh']['hosts'] = hosts
 
-    #Add new hosts to known_hosts
+    # Add new hosts to known_hosts
     Chef::Log.debug("dsh_group: opening #{ssh_file} in append mode")
     f = ::File.new(ssh_file, "a")
     hosts.each do |h|
@@ -156,17 +156,16 @@ action :join do
     end
     f.close()
 
-    #Configure dsh
-    Chef::Log.debug("dsh_group: writing to #{dsh_file}")
-    f = ::File.new(dsh_file, "w")
-    members.each do |n|
-      Chef::Log.info("Adding #{n.name} to dsh group #{new_resource.name}")
-      f.write(
+    # Configure .dsh/group/
+    f = file dsh_file do
+      owner user
+      group user
+      content members.collect { |n|
         "#{n['dsh']['groups'][new_resource.name]['user']}@" +
           "#{n['dsh']['groups'][new_resource.name]['access_name']}\n"
-      )
+      }.sort.join
     end
-    f.close()
+    f.run_action(:create)
   end # if new_resource.admin_user
 
   Chef::Log.debug("dsh_group: Howdy from :join -- " +
