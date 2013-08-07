@@ -188,7 +188,7 @@ def find_dsh_group_members(name)
     "dsh_groups:#{new_resource.name} AND chef_environment:#{node.chef_environment}"
   )
   # add ourself to the list if necessary
-  if node['dsh']['admin_groups'].key?(new_resource.name)
+  if node['dsh']['groups'].key?(new_resource.name)
     if not results.map(&:name).include?(node.name)
       Chef::Log.debug("dsh_group: #{__method__}: " +
         "i appear to be a group member, adding myself to search results")
