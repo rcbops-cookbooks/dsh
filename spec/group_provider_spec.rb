@@ -10,7 +10,8 @@ describe "dsh::default" do
     {
       :cookbook_path => [COOKBOOK_PATH],
       :evaluate_guards => true,
-      :step_into => step_into
+      :step_into => step_into,
+      :log_level => :debug
     }.merge(platform)
   end
   let(:step_into) { ["dsh_group"] }
@@ -20,8 +21,6 @@ describe "dsh::default" do
     let(:user_home) do
       dir = Dir.mktmpdir("user")
       ssh = Dir.mkdir(File.join(dir, ".ssh"))
-      dsh = Dir.mkdir(File.join(dir, ".dsh"))
-      dsh = Dir.mkdir(File.join(dir, ".dsh", "group"))
       File.write(File.join(dir, ".ssh", "authorized_keys"), "")
       File.write(File.join(dir, ".ssh", "id_rsa"), "userprivkey")
       File.write(File.join(dir, ".ssh", "id_rsa.pub"), "userpubkey")
@@ -30,8 +29,6 @@ describe "dsh::default" do
     let(:admin_user_home) do
       dir = Dir.mktmpdir("admin_user")
       ssh = Dir.mkdir(File.join(dir, ".ssh"))
-      dsh = Dir.mkdir(File.join(dir, ".dsh"))
-      dsh = Dir.mkdir(File.join(dir, ".dsh", "group"))
       File.write(File.join(dir, ".ssh", "authorized_keys"), "")
       File.write(File.join(dir, ".ssh", "id_rsa"), "adminuserprivkey")
       File.write(File.join(dir, ".ssh", "id_rsa.pub"), "adminuserpubkey")
@@ -45,7 +42,6 @@ describe "dsh::default" do
       ::File.stub("expand_path").with("~test").and_return(user_home)
       ::File.stub("expand_path").with("~admin").and_return(admin_user_home)
 
-
       ::File.stub("read").with(any_args).and_call_original
       ::File.stub("read").with("/etc/ssh/ssh_host_rsa_key.pub").and_return("hostpubkey")
 
@@ -58,8 +54,6 @@ describe "dsh::default" do
         stub(:search).
         with(:node, "dsh_admin_groups:testing AND chef_environment:#{node.chef_environment}").
         and_return(admin_group_results)
-
-      #node.should_receive("save")
     end
 
     it "installs platform packages" do
@@ -118,7 +112,8 @@ describe "dsh::default" do
 
       chef_run.should create_file(keys)
       chef_run.should create_file_with_content(keys, "userauthkeys\nadmingrouppubkey")
-      chef_run.node["dsh"]["groups"]["testing"]["authorized_keys"].should eq ["admingrouppubkey"]
+      chef_run.node["dsh"]["groups"]["testing"]["authorized_keys"].should
+        eq ["admingrouppubkey", "adminuserpubkey"]
     end
 
     it "adds member hosts to admin user known_hosts" do
@@ -129,16 +124,33 @@ describe "dsh::default" do
       member_node.set["dsh"]["host_key"] = "memberhostkey"
       group_results << member_node
 
+      # FIXME(brett): This stub has a valid matcher and appears to hook,
+      #      but the command seems to be run anyway, as I get "su: user
+      #      admin does not exist" in the output. Interestingly, the
+      #      `if' condition in the code will always succeed when this
+      #      command fails because it measures stdout with wc(1) and the
+      #      error message goes to stderr :) And unfortunately, you have
+      #      to scrape stdout when using ssh-keygen -F as it doesn't
+      #      provide useful return codes.  We still should be checking
+      #      the return code though since the command is wrapped in
+      #      su(1) and su *will* return a useful code whenever it blows
+      #      up (eg., user doesn't exist).
       Chef::Provider::LWRPBase.any_instance.
-        stub(:`).
-        with("su admin -c 'ssh-keygen -F memberhost' | wc -l").
-        and_return("0")
+        stub(:`).with(/^su admin .*ssh-keygen -F /).and_return("0")
 
       chef_run.node["dsh"]["admin_groups"]["testing"]["admin_user"].should eq "admin"
-      chef_run.node["dsh"]["hosts"].should eq [{ "name"=>"memberhost", "key"=>"memberhostkey" }]
+      chef_run.node["dsh"]["hosts"].should
+        eq [{"name"=>"memberhost", "key"=>"memberhostkey"},
+            {"name"=>"127.0.0.1", "key"=>"hostpubkey"}]
 
-      File.read("#{admin_user_home}/.ssh/known_hosts").should eq "memberhost memberhostkey\n"
-      File.read("#{admin_user_home}/.dsh/group/testing").should eq "memberuser@memberhost\n"
+      # TODO(brett): this file is actually written to disk by the recipe
+      #     with File#write; should be stubbed.
+      File.read("#{admin_user_home}/.ssh/known_hosts").should
+        eq "memberhost memberhostkey\n127.0.0.1 hostpubkey\n"
+
+      expect(chef_run).
+        to create_file_with_content "#{admin_user_home}/.dsh/group/testing",
+          "memberuser@memberhost\n"
     end
 
     context "with user hashes" do

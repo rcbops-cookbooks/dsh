@@ -38,19 +38,16 @@ action :join do
   end
 
   # TODO(brett) configure_users() is called regardless of whether
-  #     `new_resource' specifies any user attributes or not. This method
-  #     then calls create_dsh_information(), which uses only_if in its
-  #     resources to restrict convergence based on the presence of
-  #     `admin_user' attribute.  It works fine (effective noop in the
-  #     case of nil user attributes), but seems like it could be done
-  #     more clearly and less indirectly.
+  #     `new_resource' specifies any user attributes or not.  It works
+  #     fine (effective noop in the case of nil user attributes), but
+  #     seems like it should be put under the conditional below.
   configure_users
   update_host_key
 
   # If we are a member node,
   # join group by setting attributes ('user' and 'access_name').
   if new_resource.user
-    Chef::Log.debug("dsh_group: i'm a member! setting user attributes")
+    Chef::Log.debug("dsh_group: i'm a member! setting member attributes")
     node.set_unless["dsh"]["groups"][new_resource.name] = {}
     node.set["dsh"]["groups"][new_resource.name]["user"] =
       get_user_name(new_resource.user)
@@ -69,7 +66,8 @@ action :join do
   # If we are an admin node,
   # generate pubkey and set admin attributes ('pubkey' and 'admin_user').
   if new_resource.admin_user
-    Chef::Log.debug("dsh_group: i'm an admin! setting user attributes")
+    Chef::Log.debug("dsh_group: i'm an admin! setting admin attributes")
+    node.set_unless["dsh"]["admin_groups"][new_resource.name] = {}
     user = get_user_name(new_resource.admin_user)
     node.set['dsh']['admin_groups'][new_resource.name]['admin_user'] = user
     configure_pubkey(get_home(user), user)  # sets node attribute
@@ -129,7 +127,19 @@ action :join do
     user = get_user_name(new_resource.admin_user)
     home = get_home(user)
     ssh_file = "#{home}/.ssh/known_hosts"
-    dsh_file = "#{home}/.dsh/group/#{new_resource.name}"
+
+    dsh_dot_dir = ::File.join(home, '.dsh')
+    dsh_group_dir = ::File.join(dsh_dot_dir, 'group')
+    dsh_group_file = ::File.join(dsh_group_dir, new_resource.name)
+
+    # create directories with correct permissions
+    [dsh_dot_dir, dsh_group_dir].each do |dir|
+      d = directory dir do
+        owner user
+        group user
+      end
+      d.run_action(:create)
+    end
 
     members = find_dsh_group_members(new_resource.name)
     Chef::Log.debug("dsh_group: search results for group members: #{members}")
@@ -156,8 +166,8 @@ action :join do
     end
     f.close()
 
-    # Configure .dsh/group/
-    f = file dsh_file do
+    # Configure .dsh/group/<file>
+    f = file dsh_group_file do
       owner user
       group user
       content members.collect { |n|
@@ -219,8 +229,11 @@ def get_home(username)
 end
 
 def configure_pubkey(home, username)
-  privkey_path, pubkey_path = "#{home}/.ssh/id_rsa", "#{home}/.ssh/id_rsa.pub"
-  priv, pub = ::File.exists?(privkey_path), ::File.exists?(pubkey_path)
+  privkey_path = "#{home}/.ssh/id_rsa"
+  pubkey_path  = "#{home}/.ssh/id_rsa.pub"
+  priv = ::File.exists?(privkey_path)
+  pub  = ::File.exists?(pubkey_path)
+
   if priv and not pub
     Chef::Log.info("Generating pubkey for #{privkey_path}")
     system("su #{username} -c 'ssh-keygen -y -f #{privkey_path} > #{pubkey_path}'")
@@ -238,14 +251,12 @@ def configure_pubkey(home, username)
     )
     new_resource.updated_by_last_action(true)
   end
+
   pubkey = ::File.read(pubkey_path).strip
-  node.set["dsh"]["admin_groups"][new_resource.name] ||= {}
-  if pubkey != node["dsh"]["admin_groups"][new_resource.name]["pubkey"]
-    Chef::Log.info("Updating pubkey for admin_user #{username}")
-    node.set["dsh"]["admin_groups"][new_resource.name] = {
-      "user" => username,
-      "pubkey" => pubkey
-    }
+  if pubkey != node['dsh']['admin_groups'][new_resource.name]['pubkey']
+    Chef::Log.info("Setting `pubkey' node attribute (user key for admin " +
+      "`#{username}') to: #{pubkey}")
+    node.set['dsh']['admin_groups'][new_resource.name]['pubkey'] = pubkey
   end
 end
 
@@ -272,7 +283,6 @@ def configure_users()
         owner u
         group u
         mode 0700
-        action :create
       end
       d.run_action(:create)
     else
@@ -280,7 +290,6 @@ def configure_users()
     end # if !(u=="root" or u=="nova")
 
     create_ssh_directories(u, home)
-    create_dsh_information(u, home, new_resource)
   end # users.each
 end
 
@@ -298,24 +307,6 @@ def create_ssh_directories(user, home)
     end
     f.run_action(:create)
   end
-end
-
-def create_dsh_information(user, home, resource)
-  username = get_user_name(resource.admin_user)
-  d = directory "#{home}/.dsh/group" do
-    only_if { user == username }
-    owner user
-    group user
-    recursive true
-  end
-  d.run_action(:create)
-
-  f = file "#{home}/.dsh/group/#{resource.name}" do
-    only_if { user == username }
-    owner user
-    group user
-  end
-  f.run_action(:create)
 end
 
 def get_user_name(user)
