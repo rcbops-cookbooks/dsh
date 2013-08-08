@@ -1,4 +1,7 @@
 require "spec_helper"
+require "libraries/provider_dsh_group"
+require "libraries/resource_dsh_group"
+
 
 describe "dsh::default" do
   let(:chef_run) { runner.converge "dsh_test::default" }
@@ -11,7 +14,7 @@ describe "dsh::default" do
       :cookbook_path => [COOKBOOK_PATH],
       :evaluate_guards => true,
       :step_into => step_into,
-      :log_level => :debug
+      :log_level => :info
     }.merge(platform)
   end
   let(:step_into) { ["dsh_group"] }
@@ -45,12 +48,12 @@ describe "dsh::default" do
       ::File.stub("read").with(any_args).and_call_original
       ::File.stub("read").with("/etc/ssh/ssh_host_rsa_key.pub").and_return("hostpubkey")
 
-      Chef::Provider::LWRPBase.any_instance.
+      Chef::Provider::DshGroup.any_instance.
         stub(:search).
         with(:node, "dsh_groups:testing AND chef_environment:#{node.chef_environment}").
         and_return(group_results)
 
-      Chef::Provider::LWRPBase.any_instance.
+      Chef::Provider::DshGroup.any_instance.
         stub(:search).
         with(:node, "dsh_admin_groups:testing AND chef_environment:#{node.chef_environment}").
         and_return(admin_group_results)
@@ -112,8 +115,7 @@ describe "dsh::default" do
 
       chef_run.should create_file(keys)
       chef_run.should create_file_with_content(keys, "userauthkeys\nadmingrouppubkey")
-      chef_run.node["dsh"]["groups"]["testing"]["authorized_keys"].should
-        eq ["admingrouppubkey", "adminuserpubkey"]
+      chef_run.node["dsh"]["groups"]["testing"]["authorized_keys"].should eq ["admingrouppubkey", "adminuserpubkey"]
     end
 
     it "adds member hosts to admin user known_hosts" do
@@ -135,18 +137,21 @@ describe "dsh::default" do
       #      the return code though since the command is wrapped in
       #      su(1) and su *will* return a useful code whenever it blows
       #      up (eg., user doesn't exist).
-      Chef::Provider::LWRPBase.any_instance.
+      Chef::Provider::DshGroup.any_instance.
         stub(:`).with(/^su admin .*ssh-keygen -F /).and_return("0")
 
+      Chef::Provider::DshGroup.any_instance.
+        stub("known_hosts_contains?").and_return(true)
+
       chef_run.node["dsh"]["admin_groups"]["testing"]["admin_user"].should eq "admin"
-      chef_run.node["dsh"]["hosts"].should
-        eq [{"name"=>"memberhost", "key"=>"memberhostkey"},
-            {"name"=>"127.0.0.1", "key"=>"hostpubkey"}]
+      chef_run.node["dsh"]["hosts"].should eq [
+        { "name"=>"memberhost", "key"=>"memberhostkey" },
+        { "name"=>"127.0.0.1", "key"=>"hostpubkey" }
+      ]
 
       # TODO(brett): this file is actually written to disk by the recipe
       #     with File#write; should be stubbed.
-      File.read("#{admin_user_home}/.ssh/known_hosts").should
-        eq "memberhost memberhostkey\n127.0.0.1 hostpubkey\n"
+      File.read("#{admin_user_home}/.ssh/known_hosts").should eq "memberhost memberhostkey\n127.0.0.1 hostpubkey\n"
 
       expect(chef_run).
         to create_file_with_content "#{admin_user_home}/.dsh/group/testing",
@@ -159,7 +164,6 @@ describe "dsh::default" do
       it "applies the hash options to the user resource" do
         chef_run.should create_user("test")
         chef_run.user("test").uid.should == 200
-
         chef_run.should create_user("admin")
         chef_run.user("admin").uid.should == 300
       end
@@ -176,6 +180,7 @@ describe "dsh::default" do
       File.write(File.join(dir, ".ssh", "authorized_keys"), "")
       File.write(File.join(dir, ".ssh", "id_rsa"), "adminuserprivkey")
       File.write(File.join(dir, ".ssh", "id_rsa.pub"), "adminuserpubkey")
+      File.write(File.join(dir, ".dsh", "group", "testing"), "stuff")
       dir
     end
 
@@ -186,8 +191,27 @@ describe "dsh::default" do
       node.set["dsh"]["admin_groups"]["testing"]["admin_user"] = "admin"
     end
 
-    it "execute the command in parallel ssh" do
-      chef_run.should be_true
+    context "under debian platform family" do
+      let(:platform) { { :platform => "ubuntu", :version => "12.04" } }
+      it "execute the command in parallel ssh" do
+        chef_run.should be_true
+
+        cmd = "parallel-ssh -h #{admin_user_home}/.dsh/group/testing -p 32 -t 120 'ip a'"
+        expect(chef_run).to execute_command(cmd).with(:user => "admin")
+      end
     end
+
+    context "under rhel platform family" do
+      let(:platform) { { :platform => "centos", :version => "6.3" } }
+
+      it "execute the command in pdsh" do
+
+        chef_run.should be_true
+
+        cmd = "pdsh -g testing 'ip a'"
+        expect(chef_run).to execute_command(cmd).with(:user => "admin")
+      end
+    end
+
   end
 end
