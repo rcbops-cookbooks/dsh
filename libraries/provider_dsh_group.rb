@@ -319,7 +319,7 @@ class Chef
           # TODO(wilk): fix this section
           # special cases for root and nova users.  Do not create either
           # of these users
-          if !(u == "root" or u == "nova")
+          unless node['dsh']['skip_create'].include?(u)
             user_p = user u do
               shell "/bin/bash"
               home "/home/#{u}"
@@ -336,7 +336,7 @@ class Chef
             d.run_action(:create)
           else
             home = get_home(u)
-          end # if !(u=="root" or u=="nova")
+          end # unless node['dsh']['skip_create'].include?(u)
 
           create_ssh_directories(u, home)
         end # users.each
