@@ -36,6 +36,7 @@ The provider uses Chef's search functionality to discover and update the group a
 - admin_user: The admin user account on the host system
 - admin_pubkey: (optional) The admin user's public SSH key
 - network: (optional) An osops_utils-style network to use instead of the FQDN
+- skip_create: An array of users to not create home directories for (defaults to ['root','nova','glance'])
 
 Usage
 =====
