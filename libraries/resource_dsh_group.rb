@@ -34,28 +34,43 @@ class Chef
         @group = name
       end
 
+      # Gets/sets the name of the dsh group being used
       def group(arg=nil)
-        set_or_return(:group, arg, :kind_of => String)
+        set_or_return(:group, arg, :kind_of => [String])
       end
 
+      # Gets/sets the name of the member user to create/add
+      # If a string is specified, it is the username
+      # If a hash is specified, its name/value pairs are sent to the user resource being created
       def user(arg=nil)
         set_or_return(:user, arg, :kind_of => [String, Hash])
       end
 
+      # Gets/sets the name of the member admin_user to create/add
+      # If a string is specified, it is the username
+      # If a hash is specified, its name/value pairs are sent to the user resource being created
       def admin_user(arg=nil)
         set_or_return(:admin_user, arg, :kind_of => [String, Hash])
       end
 
+      # Gets/sets the admin users pubkey
       def admin_pubkey(arg=nil)
-        set_or_return(:admin_pubkey, arg, :kind_of => String)
+        set_or_return(:admin_pubkey, arg, :kind_of => [String])
       end
 
+      # Gets/set the network name to be used to lookup the access_name for the member hosts
       def network(arg=nil)
-        set_or_return(:network, arg, :kind_of => String)
+        set_or_return(:network, arg, :kind_of => [String])
       end
 
+      # Gets/sets the string to execute within the group
       def execute(arg=nil)
-        set_or_return(:execute, arg, :kind_of => String)
+        set_or_return(:execute, arg, :kind_of => [String])
+      end
+
+      # Gets/sets the list of usernames to skip when creating users
+      def skip_create(arg=nil)
+        set_or_return(:skip_create, arg, :kind_of => [Array], :default => ["root", "nova"])
       end
 
     end
