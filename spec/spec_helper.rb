@@ -1,6 +1,9 @@
 $: << File.expand_path(File.dirname(__FILE__) + "../../")
 $: << File.expand_path(File.dirname(__FILE__) + "../../libraries")
 
+require "provider_dsh_group"
+require "resource_dsh_group"
+
 if ENV["COVERAGE"]
   require "simplecov"
 

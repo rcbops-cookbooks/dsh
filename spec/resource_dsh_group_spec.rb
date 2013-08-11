@@ -1,5 +1,4 @@
 require "spec_helper"
-require "chef/resource/dsh_group"
 
 describe Chef::Resource::DshGroup do
   subject(:resource) { Chef::Resource::DshGroup.new("admin") }

@@ -1,6 +1,4 @@
 require "spec_helper"
-require "chef/provider/dsh_group"
-require "chef/resource/dsh_group"
 require "chef/run_context"
 require "chef/provider/user"
 require "chef/provider/directory"

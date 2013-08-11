@@ -16,3 +16,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+
+dsh_group "testing" do
+  user "testuser"
+  admin_user "adminuser"
+end

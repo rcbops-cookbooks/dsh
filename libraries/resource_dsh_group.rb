@@ -18,7 +18,6 @@
 #
 
 require "chef/resource"
-require "chef/provider/dsh_group"
 
 class Chef
   class Resource
