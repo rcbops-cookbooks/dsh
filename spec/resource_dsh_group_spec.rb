@@ -103,8 +103,8 @@ describe Chef::Resource::DshGroup do
   end
 
   describe "#skip_create" do
-    it "defaults with root/nove user names" do
-      resource.skip_create.should eq ["root", "nova"]
+    it "defaults with root/nova/glance user names" do
+      resource.skip_create.should eq ["root", "nova", "glance"]
     end
 
     it "accepts an Array" do
