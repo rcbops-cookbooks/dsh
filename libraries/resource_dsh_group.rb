@@ -70,7 +70,7 @@ class Chef
 
       # Gets/sets the list of usernames to skip when creating users
       def skip_create(arg=nil)
-        set_or_return(:skip_create, arg, :kind_of => [Array], :default => ["root", "nova"])
+        set_or_return(:skip_create, arg, :kind_of => [Array], :default => ["root", "nova", "glance"])
       end
 
     end
