@@ -30,7 +30,7 @@ class Chef
         @resource_name = :dsh_group
         @provider = Chef::Provider::DshGroup
         @action = :join
-        @allowed_actions = [:execute, :join]
+        @allowed_actions = [:execute, :join, :nothing]
         @group = name
       end
 
