@@ -5,7 +5,7 @@ describe Chef::Resource::DshGroup do
 
   describe "#initialize" do
     its(:action) { should eq :join }
-    its(:allowed_actions) { should eq [:execute, :join] }
+    its(:allowed_actions) { should eq [:execute, :join, :nothing] }
     its(:provider) { should eq Chef::Provider::DshGroup }
     its(:resource_name) { should eq :dsh_group }
   end
