@@ -224,8 +224,8 @@ class Chef
       # Adds/updates the ssh pubkey attribute in /dsh/admin_groups/$group/pubkey
       # from the admin users ssh directory
       def configure_pubkey_attribute
-        home = get_user_home(new_resource.admin_user)
         username = get_user_name(new_resource.admin_user)
+        home = get_user_home(username)
 
         privkey_path = "#{home}/.ssh/id_rsa"
         pubkey_path  = "#{home}/.ssh/id_rsa.pub"
