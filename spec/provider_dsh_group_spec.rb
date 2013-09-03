@@ -254,6 +254,29 @@ describe Chef::Provider::DshGroup do
   end
 
   describe "#configure_pubkey_attribute" do
+    context "if admin user hash pub/priv keys don't exist" do
+      it "creates a new keypair and configures the pubkey attribute" do
+        # specify the admin_user/pubkey
+        resource.admin_user(:username => admin_user, :uid => 500)
+        node.set["dsh"]["admin_groups"][group]["pubkey"] = nil
+
+        # return exists/content from the priv/pub files
+        provider.should_receive("get_user_home").with(admin_user).and_return("/nonexists")
+        File.should_receive("exists?").with("/nonexists/.ssh/id_rsa").and_return(false)
+        File.should_receive("exists?").with("/nonexists/.ssh/id_rsa.pub").and_return(false)
+        File.should_receive("read").with("/nonexists/.ssh/id_rsa.pub").and_return("pubkey")
+
+        # we should be creating a new keypair
+        cmd = "su #{admin_user} -c 'ssh-keygen -q -f /nonexists/.ssh/id_rsa -P \"\"'"
+        provider.should_receive("system").with(cmd, :in => "/dev/null")
+
+        provider.configure_pubkey_attribute
+
+        # ensure the pubkey is set from the pub file
+        node["dsh"]["admin_groups"][group]["pubkey"].should eq "pubkey"
+      end
+    end
+
     context "if admin user pub/priv keys don't exist" do
       it "creates a new keypair and configures the pubkey attribute" do
         # specify the admin_user/pubkey
@@ -261,7 +284,7 @@ describe Chef::Provider::DshGroup do
         node.set["dsh"]["admin_groups"][group]["pubkey"] = nil
 
         # return exists/content from the priv/pub files
-        provider.should_receive("get_user_home").and_return("/nonexists")
+        provider.should_receive("get_user_home").with(admin_user).and_return("/nonexists")
         File.should_receive("exists?").with("/nonexists/.ssh/id_rsa").and_return(false)
         File.should_receive("exists?").with("/nonexists/.ssh/id_rsa.pub").and_return(false)
         File.should_receive("read").with("/nonexists/.ssh/id_rsa.pub").and_return("pubkey")
