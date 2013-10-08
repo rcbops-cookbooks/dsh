@@ -118,9 +118,14 @@ class Chef
       def install_packages
         platform_options=node["pssh"]["platform"]
         platform_options["pssh_packages"].each do |pkg|
-          package pkg do
-            action :install
-            options platform_options["package_overrides"]
+          # Stupid. resource_collection needs an .exists?()
+          begin
+            resource_collection.find(:package => pkg)
+          rescue Chef::Exceptions::ResourceNotFound
+            package pkg do
+              action :install
+              options platform_options["package_overrides"]
+            end
           end
         end
       end
@@ -135,7 +140,12 @@ class Chef
 
         users.each do |u, o|
           unless new_resource.skip_create.include?(u)
-            user_p = user u do
+            begin
+              user_p = resource_collection.find(:user => u)
+            rescue Chef::Exceptions::ResourceNotFound
+              user_p = user(u)
+            end
+            user_p.instance_exec do
               shell "/bin/bash"
               home "/home/#{u}"
             end
@@ -143,7 +153,12 @@ class Chef
             user_p.run_action(:create)
 
             home = get_user_home(u)
-            d = directory home do
+            begin
+              d = resource_collection.find(:directory => home)
+            rescue Chef::Exceptions::ResourceNotFound
+              d = directory(home)
+            end
+            d.instance_exec do
               owner u
               group u
               mode 0700
@@ -159,14 +174,25 @@ class Chef
 
       # Creates the ssh directory and authorized_keys/known_hosts files for a user
       def create_ssh_directories(username, home)
-        d = directory "#{home}/.ssh" do
+        ssh_dir = "#{home}/.ssh"
+        begin
+          d = resource_collection.find(:directory => ssh_dir)
+        rescue Chef::Exceptions::ResourceNotFound
+          d = directory(ssh_dir)
+        end
+        d.instance_exec do
           owner username
           group username
         end
         d.run_action(:create)
 
         ["#{home}/.ssh/authorized_keys", "#{home}/.ssh/known_hosts"].each do |i|
-          f = file i do
+          begin
+            f = resource_collection.find(:file => i)
+          rescue Chef::Exceptions::ResourceNotFound
+            f = file(i)
+          end
+          f.instance_exec do
             owner username
             group username
           end
@@ -264,8 +290,8 @@ class Chef
         # read existing keys from file
         user = get_user_name(new_resource.user)
         home = get_user_home(user)
-        file = "#{home}/.ssh/authorized_keys"
-        keys = Set.new(::File.read(file).split(/\n/))
+        file_name = "#{home}/.ssh/authorized_keys"
+        keys = Set.new(::File.read(file_name).split(/\n/))
 
         # collect keys from admin nodes
         group_keys = find_dsh_group_admins.collect do |n|
@@ -279,7 +305,7 @@ class Chef
         stale_keys = old_keys - group_keys
 
         Chef::Log.debug("dsh_group: search results for admin keys: #{group_keys}")
-        Chef::Log.debug("dsh_group: local keys from #{file}: #{keys.inspect}")
+        Chef::Log.debug("dsh_group: local keys from #{file_name}: #{keys.inspect}")
         Chef::Log.debug("dsh_group: previously cached keys: #{old_keys}")
         Chef::Log.debug("dsh_group: stale keys: #{stale_keys}")
 
@@ -294,8 +320,13 @@ class Chef
         node.set["dsh"]["groups"][group_name]["authorized_keys"] = group_keys
 
         # write the authorized_keys file
-        Chef::Log.debug("dsh_group: writing admin keys to #{file}: #{keys.inspect}")
-        f = file "#{home}/.ssh/authorized_keys" do
+        Chef::Log.debug("dsh_group: writing admin keys to #{file_name}: #{keys.inspect}")
+        begin
+          f = resource_collection.find(:file => file_name)
+        rescue Chef::Exceptions::ResourceNotFound
+          f = file(file_name)
+        end
+        f.instance_exec do
           owner user
           group user
           content keys.collect { |key| key }.join("\n")
@@ -312,7 +343,12 @@ class Chef
 
         # create directories with correct permissions
         [dsh_dot_dir, dsh_group_dir].each do |dir|
-          d = directory dir do
+          begin
+            d = resource_collection.find(:directory => dir)
+          rescue Chef::Exceptions::ResourceNotFound
+            d = directory(dir)
+          end
+          d.instance_exec do
             owner user
             group user
           end
