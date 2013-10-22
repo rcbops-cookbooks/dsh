@@ -38,7 +38,7 @@ describe Chef::Provider::DshGroup do
   describe "#install_packages" do
     it "installs platform packages" do
       node.set["pssh"]["platform"]["pssh_packages"] = ["farp"]
-      node.set["pssh"]["platform"]["package_overrides"] = "-f"
+      node.set["pssh"]["platform"]["package_options"] = "-f"
 
       # packages provider should install packages with options
       provider.should_receive("package").with("farp").and_yield do |block|

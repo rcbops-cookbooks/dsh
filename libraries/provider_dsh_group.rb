@@ -120,7 +120,7 @@ class Chef
         platform_options["pssh_packages"].each do |pkg|
           package pkg do
             action :install
-            options platform_options["package_overrides"]
+            options platform_options["package_options"]
           end
         end
       end
