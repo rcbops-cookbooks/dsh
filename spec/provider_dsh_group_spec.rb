@@ -41,6 +41,8 @@ describe Chef::Provider::DshGroup do
       node.set["pssh"]["platform"]["package_options"] = "-f"
 
       # packages provider should install packages with options
+      provider.stub_chain("resource_collection", "find").and_raise(Chef::Exceptions::ResourceNotFound)
+
       provider.should_receive("package").with("farp").and_yield do |block|
         block.should_receive("action").with(:install)
         block.should_receive("options").with("-f")
@@ -60,33 +62,38 @@ describe Chef::Provider::DshGroup do
       file_provider.should_receive("run_action").exactly(4).times.with(:create)
       user_provider.should_receive("run_action").exactly(2).times.with(:create)
       directory_provider.should_receive("run_action").exactly(4).times.with(:create)
+      provider.stub_chain("resource_collection", "find").and_raise(Chef::Exceptions::ResourceNotFound)
 
 
       [user, admin_user].each do |username|
         provider.should_receive("get_user_home").with(username).and_return("/home/#{username}")
 
         # creates user
-        provider.should_receive("user").with(username).and_yield do |block|
+        provider.should_receive("user").with(username).and_return(user_provider)
+        user_provider.should_receive("instance_exec").and_yield do |block|
           block.should_receive("shell").with("/bin/bash")
           block.should_receive("home").with("/home/#{username}")
         end.and_return(user_provider)
 
         # creates user directory
-        provider.should_receive("directory").with("/home/#{username}").and_yield do |block|
+        provider.should_receive("directory").with("/home/#{username}").and_return(directory_provider)
+        directory_provider.should_receive("instance_exec").and_yield do |block|
           block.should_receive("owner").with(username)
           block.should_receive("group").with(username)
           block.should_receive("mode").with(0700)
         end.and_return(directory_provider)
 
         # creates user .ssh directory
-        provider.should_receive("directory").with("/home/#{username}/.ssh").and_yield do |block|
+        provider.should_receive("directory").with("/home/#{username}/.ssh").and_return(directory_provider)
+        directory_provider.should_receive("instance_exec").and_yield do |block|
           block.should_receive("owner").with(username)
           block.should_receive("group").with(username)
         end.and_return(directory_provider)
 
         # creates .ssh files
         ["authorized_keys", "known_hosts"].each do |filename|
-          provider.should_receive("file").with("/home/#{username}/.ssh/#{filename}").and_yield do |block|
+          provider.should_receive("file").with("/home/#{username}/.ssh/#{filename}").and_return(file_provider)
+          file_provider.should_receive("instance_exec").and_yield do |block|
             block.should_receive("owner").with(username)
             block.should_receive("group").with(username)
           end.and_return(file_provider)
@@ -106,34 +113,39 @@ describe Chef::Provider::DshGroup do
         file_provider.should_receive("run_action").exactly(4).times.with(:create)
         user_provider.should_receive("run_action").exactly(2).times.with(:create)
         directory_provider.should_receive("run_action").exactly(4).times.with(:create)
+        provider.stub_chain("resource_collection", "find").and_raise(Chef::Exceptions::ResourceNotFound)
 
 
         [user, admin_user].each do |username|
           provider.should_receive("get_user_home").with(username).and_return("/home/#{username}")
 
           # creates user
-          provider.should_receive("user").with(username).and_yield do |block|
+          provider.should_receive("user").with(username).and_return(user_provider)
+          user_provider.should_receive("instance_exec").and_yield do |block|
             block.should_receive("shell").with("/bin/bash")
             block.should_receive("home").with("/home/#{username}")
           end.and_return(user_provider)
           user_provider.should_receive("uid").with(500)
 
           # creates user directory
-          provider.should_receive("directory").with("/home/#{username}").and_yield do |block|
+          provider.should_receive("directory").with("/home/#{username}").and_return(directory_provider)
+          directory_provider.should_receive("instance_exec").and_yield do |block|
             block.should_receive("owner").with(username)
             block.should_receive("group").with(username)
             block.should_receive("mode").with(0700)
           end.and_return(directory_provider)
 
           # creates user .ssh directory
-          provider.should_receive("directory").with("/home/#{username}/.ssh").and_yield do |block|
+          provider.should_receive("directory").with("/home/#{username}/.ssh").and_return(directory_provider)
+          directory_provider.should_receive("instance_exec").and_yield do |block|
             block.should_receive("owner").with(username)
             block.should_receive("group").with(username)
           end.and_return(directory_provider)
 
           # creates .ssh files
           ["authorized_keys", "known_hosts"].each do |filename|
-            provider.should_receive("file").with("/home/#{username}/.ssh/#{filename}").and_yield do |block|
+            provider.should_receive("file").with("/home/#{username}/.ssh/#{filename}").and_return(file_provider)
+            file_provider.should_receive("instance_exec").and_yield do |block|
               block.should_receive("owner").with(username)
               block.should_receive("group").with(username)
             end.and_return(file_provider)
@@ -153,6 +165,7 @@ describe Chef::Provider::DshGroup do
         # the chef providers should receive create calls
         file_provider.should_receive("run_action").exactly(4).times.with(:create)
         directory_provider.should_receive("run_action").exactly(2).times.with(:create)
+        provider.stub_chain("resource_collection", "find").and_raise(Chef::Exceptions::ResourceNotFound)
 
 
         [resource.user, resource.admin_user].each do |username|
@@ -165,14 +178,16 @@ describe Chef::Provider::DshGroup do
           provider.should_not_receive("directory").with("/home/#{username}")
 
           # creates user .ssh directory
-          provider.should_receive("directory").with("/home/#{username}/.ssh").and_yield do |block|
+          provider.should_receive("directory").with("/home/#{username}/.ssh").and_return(directory_provider)
+          directory_provider.should_receive("instance_exec").and_yield do |block|
             block.should_receive("owner").with(username)
             block.should_receive("group").with(username)
           end.and_return(directory_provider)
 
           # creates .ssh files
           ["authorized_keys", "known_hosts"].each do |filename|
-            provider.should_receive("file").with("/home/#{username}/.ssh/#{filename}").and_yield do |block|
+            provider.should_receive("file").with("/home/#{username}/.ssh/#{filename}").and_return(file_provider)
+            file_provider.should_receive("instance_exec").and_yield do |block|
               block.should_receive("owner").with(username)
               block.should_receive("group").with(username)
             end.and_return(file_provider)
@@ -212,7 +227,7 @@ describe Chef::Provider::DshGroup do
     context "with network" do
       it "adds the access_name from network name lookup" do
         # configure ipmanagement to return an ip for a network
-        ipmanagement = mock("Chef::Recipe::IPManagement")
+        ipmanagement = double("Chef::Recipe::IPManagement")
         ipmanagement.should_receive("get_ip_for_net").with("management", node).and_return("localhost")
         stub_const("Chef::Recipe::IPManagement", ipmanagement)
 
@@ -342,34 +357,77 @@ describe Chef::Provider::DshGroup do
 
   describe "#add_admin_nodes_to_authorized_keys" do
     # TODO: Add more tests around stale keys/node vs file, etc
-    it "adds admin nodes to users authorized_keys" do
-      # specify user/authorzed_keys
-      resource.user(user)
-      node.set["dsh"]["groups"][group]["authorized_keys"] = []
+    context "when the file resource exists" do
+      it "adds admin nodes to users authorized_keys" do
+        # specify user/authorzed_keys
+        resource.user(user)
+        node.set["dsh"]["groups"][group]["authorized_keys"] = []
 
-      # configure search results
-      result = Chef::Node.new
-      result.set["dsh"]["admin_groups"][group]["pubkey"] = "pubkey"
+        # configure search results
+        result = Chef::Node.new
+        result.set["dsh"]["admin_groups"][group]["pubkey"] = "pubkey"
 
-      # chef provider should receive create call
-      file_provider.should_receive("run_action").with(:create)
+        # pretend resource doesn't exist
+        provider.stub_chain("resource_collection", "find").
+          with(:file => "/home/#{user}/.ssh/authorized_keys").
+          and_return(file_provider)
 
-      # return search results
-      provider.should_receive("find_dsh_group_admins").and_return([result])
-      provider.should_receive("file").with("/home/#{user}/.ssh/authorized_keys").and_yield do |block|
-        block.should_receive("owner").with(user)
-        block.should_receive("group").with(user)
-        block.should_receive("content").with("pubkey")
-      end.and_return(file_provider)
+        # chef provider should receive create call
+        file_provider.should_receive("run_action").with(:create)
 
-      # read users current keys file for appending of admin keys
-      provider.should_receive("get_user_home").with(user).and_return("/home/#{user}")
-      File.should_receive("read").with("/home/#{user}/.ssh/authorized_keys").and_return("")
+        # return search results
+        provider.should_receive("find_dsh_group_admins").and_return([result])
+        file_provider.should_receive("instance_exec").and_yield do |block|
+          block.should_receive("owner").with(user)
+          block.should_receive("group").with(user)
+          block.should_receive("content").with("pubkey")
+        end.and_return(file_provider)
 
-      provider.add_admin_nodes_to_authorized_keys
+        # read users current keys file for appending of admin keys
+        provider.should_receive("get_user_home").with(user).and_return("/home/#{user}")
+        File.should_receive("read").with("/home/#{user}/.ssh/authorized_keys").and_return("")
 
-      # ensure authorized_keys is updated from the admins pubkey attribute
-      node["dsh"]["groups"][group]["authorized_keys"].should eq ["pubkey"]
+        provider.add_admin_nodes_to_authorized_keys
+
+        # ensure authorized_keys is updated from the admins pubkey attribute
+        node["dsh"]["groups"][group]["authorized_keys"].should eq ["pubkey"]
+      end
+    end
+
+    context "when the file resource does not exist" do
+      it "adds admin nodes to users authorized_keys" do
+        # specify user/authorzed_keys
+        resource.user(user)
+        node.set["dsh"]["groups"][group]["authorized_keys"] = []
+
+        # configure search results
+        result = Chef::Node.new
+        result.set["dsh"]["admin_groups"][group]["pubkey"] = "pubkey"
+
+        # pretend resource doesn't exist
+        provider.stub_chain("resource_collection", "find").and_raise(Chef::Exceptions::ResourceNotFound)
+
+        # chef provider should receive create call
+        file_provider.should_receive("run_action").with(:create)
+
+        # return search results
+        provider.should_receive("find_dsh_group_admins").and_return([result])
+        provider.should_receive("file").with("/home/#{user}/.ssh/authorized_keys").and_return(file_provider)
+        file_provider.should_receive("instance_exec").and_yield do |block|
+          block.should_receive("owner").with(user)
+          block.should_receive("group").with(user)
+          block.should_receive("content").with("pubkey")
+        end.and_return(file_provider)
+
+        # read users current keys file for appending of admin keys
+        provider.should_receive("get_user_home").with(user).and_return("/home/#{user}")
+        File.should_receive("read").with("/home/#{user}/.ssh/authorized_keys").and_return("")
+
+        provider.add_admin_nodes_to_authorized_keys
+
+        # ensure authorized_keys is updated from the admins pubkey attribute
+        node["dsh"]["groups"][group]["authorized_keys"].should eq ["pubkey"]
+      end
     end
   end
 
@@ -381,9 +439,11 @@ describe Chef::Provider::DshGroup do
       # create dsh group directories
       directory_provider.should_receive("run_action").exactly(2).times.with(:create)
       provider.should_receive("get_user_home").with(admin_user).and_return("/home/#{admin_user}")
+      provider.stub_chain("resource_collection", "find").and_raise(Chef::Exceptions::ResourceNotFound)
 
       [".dsh", ".dsh/group"].each do |dir|
-        provider.should_receive("directory").with("/home/#{admin_user}/#{dir}").and_yield do |block|
+        provider.should_receive("directory").with("/home/#{admin_user}/#{dir}").and_return(directory_provider)
+        directory_provider.should_receive("instance_exec").and_yield do |block|
           block.should_receive("owner").with(admin_user)
           block.should_receive("group").with(admin_user)
         end.and_return(directory_provider)

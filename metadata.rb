@@ -4,7 +4,7 @@ maintainer_email "rcb-deploy@lists.rackspace.com"
 license          "Apache 2.0"
 description      "Installs and Configures dsh"
 long_description IO.read(File.join(File.dirname(__FILE__), "README.md"))
-version           "4.2.0"
+version          IO.read(File.join(File.dirname(__FILE__), 'VERSION'))
 
 %w{ amazon centos debian fedora oracle redhat scientific ubuntu }.each do |os|
   supports os
